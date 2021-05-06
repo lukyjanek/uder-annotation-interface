@@ -24,6 +24,13 @@ h1 {
     bottom: 0px;
 }
 
+.head {
+    position: absolute;
+    top: 0px;
+    width: 100%;
+    /* bottom: 0px; */
+}
+
 .button {
     background-color: #4CAF50;
     border: none;
@@ -39,13 +46,14 @@ h1 {
 
 .btn-blue {background-color: #008CBA;}
 .btn-red {background-color: #f44336;}
+.btn-black {background-color: black; float: left; margin: 8px 8px 0px 8px}
 
 input[type="file"] {
     display: none;
 }
 
 input[type="text"] {
-    font-size: 1em;
+    font-size: 2em;
     margin: 2px 2px;
     padding: 15px 15px;
     text-align: center;
