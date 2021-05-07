@@ -56,7 +56,12 @@
                     style: [{
                             // node properties
                             selector: 'node[id]',
-                            style:  { 'content': 'data(id)' }
+                            style:  {
+                                        'content': 'data(id)',
+                                        'shape': 'ellipse',
+                                        'width': '25%',
+                                        'height': '25%'
+                                    }
                             },
                             {
                             // edge properties
@@ -65,7 +70,7 @@
                                         'curve-style': 'unbundled-bezier',
                                         'line-style': 'data(intoTree)',
                                         'target-arrow-shape': 'none',
-                                        'source-arrow-shape': 'tee'
+                                        'source-arrow-shape': 'tee',
                                     }
                             }],
                     elements: content
@@ -74,7 +79,7 @@
 
             // func: set style of the displaying graphs 
             function setStyle() {
-                cy.$('[intoTree = "solid"]').style('width', '3');
+                cy.$('[intoTree = "solid"]').style('width', '2');
                 cy.$('[intoTree = "solid"]').style('source-arrow-shape', 'triangle');
                 cy.$('[intoTree = "dotted"]').style('width', '1');
                 cy.$('[intoTree = "dotted"]').style('source-arrow-shape', 'tee');
@@ -134,7 +139,7 @@
             // func: restore selected edges
             function restore_selected_edges() {
                 cy.$('edge:selected').style('line-style', 'solid');
-                cy.$('edge:selected').style('width', '3');
+                cy.$('edge:selected').style('width', '2');
                 cy.$('edge:selected').style('source-arrow-shape', 'triangle');
                 cy.$('edge:selected').data('intoTree', 'solid');
             };
@@ -175,6 +180,11 @@
                     lemmas.forEach(function(item) { output.push(item); });
                     $('#info_text').text(output.join(' '));
                 }
+            };
+
+            // func: show manual
+            function show_manual() {
+                $('#manualwindow').css('display', 'block');
             };
 
             // func: close information window
@@ -260,9 +270,173 @@
                 }
             };
 
+            // funct: dictionary Pythonic .get(...)
+            function dict_get(object, key, default_value) {
+                var result = object[key];
+                return (typeof result !== "undefined") ? result : default_value;
+            }
+
 
             // INITIALISE: document is fully loaded
             $(document).ready(function(){
+
+                // WHEN: file is uploaded using file-convert-from-txt
+                $('#file-convert-from-txt').change(
+                    function(e) {
+                        var file = e.target.files[0];
+                        var reader = new FileReader();
+                        reader.onload = function(e) {
+                            // load data
+                            var data = e.target.result.split('\n');
+
+                            // convert data - cluster families
+                            var lexemes = {};
+                            var clusters = [];
+                            for (var i = 0; i < data.length; i++){
+                                var entry = data[i].split('\t');
+                                if (entry.length != 3) {
+                                    continue;
+                                };
+
+                                var target = dict_get(lexemes, entry[1], null);
+                                var source = dict_get(lexemes, entry[2], null);
+
+                                if (target == null && source == null) {
+                                    lexemes[entry[1]] = clusters.length;
+                                    lexemes[entry[2]] = clusters.length;
+                                    clusters.push([entry]);
+
+                                } else if (source == null) {
+                                    lexemes[entry[2]] = target;
+                                    clusters[target].push(entry);
+
+                                } else if (target == null) {
+                                    lexemes[entry[1]] = source;
+                                    clusters[source].push(entry);
+
+                                } else if (target == source) {
+                                    clusters[target].push(entry);
+
+                                } else {
+                                    for (var j = 0; j < clusters[source].length; j++) {
+                                        clusters[target].push(clusters[source][j]);
+                                        lexemes[clusters[source][j][1]] = target;
+                                        lexemes[clusters[source][j][2]] = target;
+                                    };
+                                    clusters[source] = null;
+                                    clusters[target].push(entry);
+                                    lexemes[entry[2]] = target;
+                                };
+                            };
+
+                            // convert data - re-formate to object
+                            var json = [];
+                            for (var i = 0; i < clusters.length; i++) {
+                                if (clusters[i] != null) {
+                                    var item = {'edges': [], 'nodes': []};
+                                    var seen_nodes = [];
+                                    var seen_edges = [];
+                                    for (var j = 0; j < clusters[i].length; j++) {
+                                        // edges
+                                        if (!(seen_edges.includes(clusters[i][j]))) {
+                                            var mark;
+                                            if (clusters[i][j][0] == '+'){
+                                                mark = 'solid';
+                                            } else {
+                                                mark = 'dotted';
+                                            };
+                                            var relation = {"data": {"target": clusters[i][j][1], "intoTree": mark, "source": clusters[i][j][2]}};
+                                            item['edges'].push(relation);
+                                            seen_edges.push(clusters[i][j]);
+                                        };
+                                        // nodes
+                                        if (!(seen_nodes.includes(clusters[i][j][1]))) {
+                                            var node = {"data": {"name": clusters[i][j][1], "id": clusters[i][j][1]}};
+                                            item['nodes'].push(node);
+                                            seen_nodes.push(clusters[i][j][1]);
+                                        };
+                                        if (!(seen_nodes.includes(clusters[i][j][2]))) {
+                                            var node = {"data": {"name": clusters[i][j][2], "id": clusters[i][j][2]}};
+                                            item['nodes'].push(node);
+                                            seen_nodes.push(clusters[i][j][2]);
+                                        };
+                                    };
+                                    json.push(item);
+                                };
+                            };
+
+                            // save data
+                            var a = document.createElement('a');
+                            document.body.appendChild(a);
+                            a.style = 'display: none';
+                            var blob = new Blob([JSON.stringify(json)], {type: 'text/plain;charset=utf-8'});
+                            if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+                                window.navigator.msSaveOrOpenBlob(blob, 'text-converted-to-json.json');
+                            }
+                            else {
+                                var url = window.URL.createObjectURL(blob);
+                                a.href = url;
+                                a.download = 'text-converted-to-json.json';
+                                a.click();
+                                window.URL.revokeObjectURL(url);
+                            }
+
+                        };
+                        reader.readAsText(file);
+                    }
+                );
+
+                // WHEN: file is uploaded using file-convert-from-json
+                $('#file-convert-from-json').change(
+                    function(e) {
+                        var file = e.target.files[0];
+                        var reader = new FileReader();
+                        reader.onload = function(e) {
+                            // load data
+                            var data = JSON.parse(e.target.result);
+
+                            // convert data
+                            var txt = [];
+                            for (var i = 0; i < data.length; i++) {
+                                for (var j = 0; j < data[i]['edges'].length; j++) {
+                                    var target = data[i]['edges'][j]['data']['target'];
+                                    var source = data[i]['edges'][j]['data']['source'];
+
+                                    var mark = data[i]['edges'][j]['data']['intoTree'];
+                                    if (mark == 'solid') {
+                                        mark = '+';
+                                    } else {
+                                        mark = '-';
+                                    };
+
+                                    txt.push([mark, target, source]);
+                                };
+                            };
+                            
+                            // save data
+                            var txt_to_save = '';
+                            for (var i = 0; i < txt.length; i++) {
+                                txt_to_save += txt[i].join('\t') + '\n';
+                            };
+
+                            var a = document.createElement('a');
+                            document.body.appendChild(a);
+                            a.style = 'display: none';
+                            var blob = new Blob([txt_to_save], {type: 'text/plain;charset=utf-8'});
+                            if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+                                window.navigator.msSaveOrOpenBlob(blob, 'json-converted-to-text.tsv');
+                            }
+                            else {
+                                var url = window.URL.createObjectURL(blob);
+                                a.href = url;
+                                a.download = 'json-converted-to-text.tsv';
+                                a.click();
+                                window.URL.revokeObjectURL(url);
+                            }
+                        };
+                        reader.readAsText(file);
+                    }
+                );
 
                 // WHEN: file is uploaded using file-button
                 $('#file-input').change(
@@ -300,7 +474,7 @@
                             a.download = 'filename.json';
                             a.click();
                             window.URL.revokeObjectURL(url);
-                        }                       
+                        }
                     }
                 );
 
@@ -367,7 +541,7 @@
                 $('#textual').click(function(e) { list_lexemes() });
 
                 // WHEN: click on manual-button
-                $('#manual').click(function(e) { $('#manualwindow').css('display', 'block') });
+                $('#manual').click(function(e) { show_manual() });
 
                 // WHEN: click on close-button of info-window
                 $('.close').click(function(e) { close_info() });
@@ -383,6 +557,7 @@
                     var actions = {
                         84: check_treeness,
                         76: list_lexemes,
+                        77: show_manual,
                         27: close_info,
                         46: remove_selected_edges,
                         16: restore_selected_edges,
@@ -437,21 +612,21 @@
             <div class="modal-content">
                 <span class="close">&times;</span>
                 <h2><strong>Text of the manual:</strong></h2>
-                <p>testing text...</p>
+                <p style="font-size:large;">testing text...</p>
             </div>
         </div>
 
         <div class="w3-row w3-center controls">
             <div class="w3-col" style="width: 30%;">
                 <label class="custom-file-upload">
-                    <input type="file" id="file-convert-from-txt" /><br>TXT to JSON
+                    <input type="file" id="file-convert-from-txt" />TSV <br>to JSON
                 </label>
                 <label class="custom-file-upload">
                     <input type="file" id="file-input" />Upload <br>JSON
                 </label>
                 <button class="custom-file-upload" id="save">Save <br>JSON</button>
                 <label class="custom-file-upload">
-                    <input type="file" id="file-convert-from-json" /><br>JSON to TXT
+                    <input type="file" id="file-convert-from-json" />JSON <br>to TSV
                 </label>
             </div>
 
@@ -470,7 +645,7 @@
                 <input type="checkbox" name='allow' id="allow-all">
                 <button type="button" class="button btn-blue" style="opacity: 0.5; cursor: default;" id="restoreall" disabled>Restore <br>ALL</button>
                 <button type="button" class="button btn-red" style="opacity: 0.5; cursor: default;" id="removeall" disabled>Remove <br>ALL</button>
-                <button class="button" id="textual"><br>Lexemes</button>
+                <button class="button" id="textual">Print <br>Lexemes</button>
                 <button class="button" id="treeness">Is it <br>tree?</button>
             </div>
         </div>
