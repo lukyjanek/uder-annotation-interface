@@ -42,6 +42,7 @@ h1 {
     font-size: 1em;
     margin: 2px 2px;
     cursor: pointer;
+    border-radius: 12px;
 }
 
 .btn-blue {background-color: #008CBA;}
@@ -53,11 +54,8 @@ input[type="file"] {
 }
 
 input[type="text"] {
-    font-size: 2em;
-    margin: 2px 2px;
-    padding: 15px 15px;
+    padding: 2px 2px;
     text-align: center;
-    width: 80px;
 }
 
 .custom-file-upload {
@@ -71,7 +69,11 @@ input[type="text"] {
     font-size: 1em;
     margin: 2px 2px;
     cursor: pointer;
+    border-radius: 12px;
 }
+
+.cfu-color {background-color: #f2eb1b;}
+
 
 /* source: https://www.w3schools.com/howto/howto_css_modals.asp */
 .modal {
@@ -89,7 +91,7 @@ input[type="text"] {
 
 .modal-content {
     background-color: #fefefe;
-    margin: 15% auto;
+    margin: 5% auto;
     padding: 20px;
     border: 1px solid #888;
     width: 80%;

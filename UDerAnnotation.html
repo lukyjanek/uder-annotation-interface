@@ -498,7 +498,7 @@
                 $('#restoreall').click(
                     function() {
                         cy.$('edge').style('line-style', 'solid');
-                        cy.$('edge').style('width', '3');
+                        cy.$('edge').style('width', '2');
                         cy.$('edge').style('source-arrow-shape', 'triangle');
                         cy.$('edge').data('intoTree', 'solid');
                     }
@@ -516,7 +516,7 @@
                         var want = $('#current').val().trim();
                         if (Number(want)) {
                             want = Number($('#current').val()) - 1;
-                            if (want < 0 || want > max_fam) {
+                            if (want < 0 || want > max_fam - 1) {
                                 $('#current').val(cur_fam + 1)
                                 return;
                             }
@@ -611,22 +611,97 @@
         <div id="manualwindow" class="modal">
             <div class="modal-content">
                 <span class="close">&times;</span>
-                <h2><strong>Text of the manual:</strong></h2>
-                <p style="font-size:large;">testing text...</p>
+                <h2><strong>Manual</strong></h2>
+                <h3>Introduction</h3>
+                <p style="font-size:large;">
+                    This Interface for manual annotation serves as a siple tool for annotating clusters of lexemes that are derivationally related, e.g., <em>teacher</em> is derived from <em>to teach</em>.
+                    The main purpos of this tool was to facilitate annotation of data from individual resources that have been harmonised into the Universal Derivations collection;
+                    the expectation was to load the original data of derivationally related lexemes and organise their clusters into rooted tree data structures.
+                    It was done by marking individual relations between lexemes as present/absent in the resulting rooted trees.
+                    The tool is, however, utilisable for more general annotation tasks.
+                    For instance, a given data can be reanotated using this interface, and the interface can serve as a simple visualisation tool (as it allows users to load data stored in .tsv format).
+                </p>
+                <h3>Controls</h3>
+                <p style="font-size:large;">
+                    Once the data are uploaded (using <strong>Upload JSON</strong>, individual clusters of connected lexemes are automatically displayed.
+                    The canvas can be shifted by clicking and holding the <strong>left mouse button</strong> on the white empty place, and it can be zoomed in/out by <strong>mouse wheel</strong>.
+                    Lexemes are represented as nodes, relations between them are represented as edges.
+                    Individual nodes can be moved by clicking the <strong>left mouse button</strong> on the individual node, holding the <strong>left mouse button</strong> and moving the node.
+                    Each edge can be annotated by clicking the <strong>left mouse button</strong> and then by selecting the desired action button at the bottom panel (see buttons below and their keyboard shortcuts).
+                    More than one edge/nodes can be selected by holding the <strong>Ctrl</strong> key and by clicking the desired edges.
+                </p>
+                <h3>Buttons (key shortcuts)</h3>
+                <p style="font-size:large;">
+                    <strong>TSV to JSON</strong>
+                    - changes the given input .tsv format into the .json format, which is the main working format for this interface;
+                    the expected .tsv format consists of three columns separated by tabulators: mark, target_lexeme, source_lexeme; where
+                    the mark is + (the edge is present in the data) or - (an edge is abset in the data),
+                    the target_lexeme is the base lexeme, and
+                    the source_lexeme is the derived lexeme.
+                    <br>
+                    <strong>Upload JSON</strong>
+                    - uploads input .json data.
+                    <br>
+                    <strong>Save JSON</strong>
+                    - saves the annotated data from the interface into .json format. The positions of nodes in individual canvases are also stored in the .json format.
+                    <br>
+                    <strong>JSON to TSV</strong>
+                    - changes the output .json format into the .tsv format that consists of three columns as described above (see <strong>TSV to JSON</strong>);
+                    positions of nodes in individual canvases are not stored in this format.
+                    <br><br>
+                    <strong>&laquo;</strong> (left arrow)
+                    - displayes the previous cluster of connected lexemes, if there is any previous cluster.
+                    <br>
+                    <strong>Restore edge</strong> (shift)
+                    - marks the selected edge(s) as solid, i.e., the edge should be present in the cluster.
+                    <br>
+                    <strong>Remove edge</strong> (delete)
+                    - marks the selected edge(s) as dotted, i.e., the edge should be absent int the cluster.
+                    <br>
+                    <strong>&raquo;</strong> (right arrow)
+                    - displayes the following cluster of connected lexemes, if there is any following cluster.
+                    <br><br>
+                    <strong>Input_text_box </strong>
+                    - allows skipping cluster according to their ids (numbers from 1 to the number of loaded clusters);
+                    and it also allows users to find the cluster that contains a desired lexemes (user can write the desired lexeme into the text box);
+                    the submit of id/lexeme in this input_text_box is done by <strong>Enter</strong>.
+                    <br><br>
+                    <strong>Restore ALL</strong>
+                    - selects and marks all edges as solid, i.e., the edge should be present in the cluster;
+                    this button is locked in default setting, but it can be unlocked by using the checkbox on the left of the button.
+                    <br>
+                    <strong>Remove ALL</strong>
+                    - selects and marks all edges as dotted, i.e., the edge should be absent in the cluster;
+                    this button is locked in default setting, but it can be unlocked by using the checkbox on the left of the button.
+                    <br>
+                    <strong>Print Lexemes</strong> (L)
+                    - lists all lexemes from the displayed cluster;
+                    the lexemes can be easily copied and googled, for example.
+                    <br>
+                    <strong>Is it tree?</strong> (T)
+                    - checks whether the displayed cluster(s) with the solid edges is/are organised into rooted tree(s);
+                    the annotator can easily know whether there is still any non-tree edge in the cluster(s).
+                </p>
+                <h3>License</h3>
+                <p style="font-size:large;">
+                    <a target="_blank" href="https://lukyjanek.github.io/">Lukáš Kyjánek</a> is the author of this Interface for manual annotation.
+                    This interface is licensed under the GNU General Public License v3.0.
+                    The scripts of this interface are available on the author's GitHub (see the <strong>GitHub</strong> button in the top left corner of the web page).
+                </p>
             </div>
         </div>
 
         <div class="w3-row w3-center controls">
             <div class="w3-col" style="width: 30%;">
-                <label class="custom-file-upload">
-                    <input type="file" id="file-convert-from-txt" />TSV <br>to JSON
+                <label class="custom-file-upload cfu-color">
+                    <input type="file" id="file-convert-from-txt" >TSV <br>to JSON</input>
                 </label>
                 <label class="custom-file-upload">
-                    <input type="file" id="file-input" />Upload <br>JSON
+                    <input type="file" id="file-input" />Upload JSON</input>
                 </label>
-                <button class="custom-file-upload" id="save">Save <br>JSON</button>
-                <label class="custom-file-upload">
-                    <input type="file" id="file-convert-from-json" />JSON <br>to TSV
+                <button class="custom-file-upload" id="save">Save JSON</button>
+                <label class="custom-file-upload cfu-color">
+                    <input type="file" id="file-convert-from-json" />JSON <br>to TSV</input>
                 </label>
             </div>
 
@@ -638,7 +713,7 @@
             </div>
 
             <div class="w3-col" style="width: 15%;">
-                <input type="text" id="current" style="text-align:center;"> / <input type="text" id="max" disabled>
+                <input type="text" class="w3-input w3-border w3-round-large" id="current"> from <input class="w3-input w3-border w3-round-large" type="text" id="max" disabled>
             </div>
 
             <div class="w3-col" style="width: 30%;">
