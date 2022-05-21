@@ -1,15 +1,16 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <title>UDer Annotation</title>
+        <title>Annotation Interface</title>
         <meta charset="UTF-8">
-        <meta name="description" content="UDer: Interface for manual annotation">
+        <meta name="description" content="Interface for manual annotation">
         <meta name="keywords" content="UDer, Universal Derivations, annotation, word-formation, derivatioanl morphology">
         <meta name="author" content="Lukáš Kyjánek">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
         <link rel="stylesheet" href="components/w3.css">
-        <link rel="stylesheet" href="components/mystyles.css"> 
+        <link rel="stylesheet" href="components/mystyles.css">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
         <script src="components/cytoscape.min.js"></script>
         <script src="components/jquery.min.js"></script>
         <script src="components/notify.min.js"></script>
@@ -543,6 +544,18 @@
                 // WHEN: click on manual-button
                 $('#manual').click(function(e) { show_manual() });
 
+                // WHEN: click on demo-button
+                $('#demo').click(function(e) {
+                        var raw_data = '[ { "edges": [ {"data": {"target": "glatt_A", "intoTree": "solid", "source": "Gl\u00e4tte_Nf"}}, {"data": {"target": "glatt_A", "intoTree": "solid", "source": "gl\u00e4tten_V"}}, {"data": {"target": "gl\u00e4tten_V", "intoTree": "solid", "source": "Gl\u00e4tte_Nf"}}, {"data": {"target": "gl\u00e4tten_V", "intoTree": "solid", "source": "gl\u00e4ttend_A"}} ], "nodes": [ {"data": {"name": "gl\u00e4ttend_A", "id": "gl\u00e4ttend_A"}}, {"data": {"name": "Gl\u00e4tte_Nf", "id": "Gl\u00e4tte_Nf"}}, {"data": {"name": "glatt_A", "id": "glatt_A"}}, {"data": {"name": "gl\u00e4tten_V", "id": "gl\u00e4tten_V"}} ] }, { "edges": [ {"data": {"target": "Goldschmied_Nm", "intoTree": "solid", "source": "Goldschmiedin_Nf"}}, {"data": {"target": "Goldschmiede_Nm", "intoTree": "solid", "source": "Goldschmiedin_Nf"}} ], "nodes": [ {"data": {"name": "Goldschmiedin_Nf", "id": "Goldschmiedin_Nf"}}, {"data": {"name": "Goldschmied_Nm", "id": "Goldschmied_Nm"}}, {"data": {"name": "Goldschmiede_Nm", "id": "Goldschmiede_Nm"}} ] }, { "edges": [ {"data": {"target": "Anblasen_Nn", "intoTree": "solid", "source": "anblasen_V"}}, {"data": {"target": "Einblasen_Nn", "intoTree": "solid", "source": "einblasen_V"}}, {"data": {"target": "Ausblasen_Nn", "intoTree": "solid", "source": "ausblasen_V"}}, {"data": {"target": "blasen_V", "intoTree": "solid", "source": "blasend_A"}}, {"data": {"target": "blasen_V", "intoTree": "solid", "source": "einblasen_V"}}, {"data": {"target": "blasen_V", "intoTree": "solid", "source": "verblasen_V"}}, {"data": {"target": "blasen_V", "intoTree": "solid", "source": "Blase_Nf"}}, {"data": {"target": "blasen_V", "intoTree": "solid", "source": "anblasen_V"}}, {"data": {"target": "blasen_V", "intoTree": "solid", "source": "durchblasen_V"}}, {"data": {"target": "Blasen_Nn", "intoTree": "solid", "source": "Anblasen_Nn"}}, {"data": {"target": "Blasen_Nn", "intoTree": "solid", "source": "ausblasen_V"}}, {"data": {"target": "Blasen_Nn", "intoTree": "solid", "source": "\u00dcberblasen_Nn"}}, {"data": {"target": "Blasen_Nn", "intoTree": "solid", "source": "Ausblasen_Nn"}}, {"data": {"target": "Blasen_Nn", "intoTree": "solid", "source": "geblasen_A"}}, {"data": {"target": "Blasen_Nn", "intoTree": "solid", "source": "blasen_V"}}, {"data": {"target": "Blase_Nf", "intoTree": "solid", "source": "anblasen_V"}}, {"data": {"target": "Blase_Nf", "intoTree": "solid", "source": "ausblasen_V"}}, {"data": {"target": "Blase_Nf", "intoTree": "solid", "source": "verblasen_V"}}, {"data": {"target": "Blase_Nf", "intoTree": "solid", "source": "durchblasen_V"}}, {"data": {"target": "Blase_Nf", "intoTree": "solid", "source": "einblasen_V"}} ], "nodes": [ {"data": {"name": "blasend_A", "id": "blasend_A"}}, {"data": {"name": "\u00dcberblasen_Nn", "id": "\u00dcberblasen_Nn"}}, {"data": {"name": "Anblasen_Nn", "id": "Anblasen_Nn"}}, {"data": {"name": "anblasen_V", "id": "anblasen_V"}}, {"data": {"name": "Einblasen_Nn", "id": "Einblasen_Nn"}}, {"data": {"name": "Ausblasen_Nn", "id": "Ausblasen_Nn"}}, {"data": {"name": "blasen_V", "id": "blasen_V"}}, {"data": {"name": "durchblasen_V", "id": "durchblasen_V"}}, {"data": {"name": "einblasen_V", "id": "einblasen_V"}}, {"data": {"name": "ausblasen_V", "id": "ausblasen_V"}}, {"data": {"name": "verblasen_V", "id": "verblasen_V"}}, {"data": {"name": "Blasen_Nn", "id": "Blasen_Nn"}}, {"data": {"name": "geblasen_A", "id": "geblasen_A"}}, {"data": {"name": "Blase_Nf", "id": "Blase_Nf"}} ] }]'
+                        families = JSON.parse(raw_data);
+                        max_fam = families.length;
+                        display(families[cur_fam]);
+                        $('#current').val(cur_fam + 1);
+                        $('#max').val(max_fam);
+                        setStyle();
+                        loaded = true;
+                    });
+
                 // WHEN: click on close-button of info-window
                 $('.close').click(function(e) { close_info() });
 
@@ -592,13 +605,15 @@
     </head>
     <body>
         <div class="w3-row w3-left head">
-            <a href="https://github.com/lukyjanek/uder-annotation-interface" target="_blank" class="button btn-black">GitHub</a>
-            <button class="button btn-black" id="manual">Manual</button>
-            <h1>UDer: Interface for manual annotation</h1>
+            <a href="https://github.com/lukyjanek/uder-annotation-interface" target="_blank" class="button btn-black w3-hide-small">GitHub</a>
+            <button class="button btn-black" id="manual">About</button>
+            <button class="button btn-black" id="demo">Demo</button>
+            <h1 class="w3-hide-small">Interface for manual annotation</h1>
+            <h1 class="w3-hide-medium w3-hide-large">Annot. Interface</h1>
         </div>
         
 
-        <div class="palete" id="cy"></div>
+        <div class="palete w3-border" id="cy"></div>
 
         <div id="infowindow" class="modal">
             <div class="modal-content">
@@ -689,21 +704,21 @@
                 <h3>License</h3>
                 <p style="font-size:large;">
                     <a target="_blank" href="https://lukyjanek.github.io/">Lukáš Kyjánek</a> is the author of this Interface for manual annotation.
-                    This interface is licensed under the GNU General Public License v3.0.
-                    The scripts of this interface are available on the author's GitHub (see the <strong>GitHub</strong> button in the top left corner of the web page).
+                    This interface is licensed under the MIT License.
+                    The scripts of this interface are available on the author's <a target="_blank" href="https://github.com/lukyjanek/uder-annotation-interface">GitHub</a>.
                 </p>
             </div>
         </div>
 
-        <div class="w3-row w3-center controls">
+        <div class="w3-row w3-center controls w3-hide-small w3-hide-medium">
             <div class="w3-col" style="width: 30%;">
                 <label class="custom-file-upload cfu-color">
                     <input type="file" id="file-convert-from-txt" >TSV <br>to JSON</input>
                 </label>
                 <label class="custom-file-upload">
-                    <input type="file" id="file-input" />Upload JSON</input>
+                    <input type="file" id="file-input" />Upload <br>JSON</input>
                 </label>
-                <button class="custom-file-upload" id="save">Save JSON</button>
+                <button class="custom-file-upload" id="save">Save <br>JSON</button>
                 <label class="custom-file-upload cfu-color">
                     <input type="file" id="file-convert-from-json" />JSON <br>to TSV</input>
                 </label>
@@ -721,12 +736,92 @@
             </div>
 
             <div class="w3-col" style="width: 30%;">
-                <input type="checkbox" name='allow' id="allow-all">
+                <i class="fa fa-lock"></i> &nbsp; <input type="checkbox" name='allow' id="allow-all">
                 <button type="button" class="button btn-blue" style="opacity: 0.5; cursor: default;" id="restoreall" disabled>Restore <br>ALL</button>
                 <button type="button" class="button btn-red" style="opacity: 0.5; cursor: default;" id="removeall" disabled>Remove <br>ALL</button>
                 <button class="button" id="textual">Print <br>Lexemes</button>
                 <button class="button" id="treeness">Is it <br>tree?</button>
             </div>
         </div>
+
+        <div class="w3-row w3-center controls w3-hide-large">
+            <div class="w3-col" style="width: 25%;">
+                <button class="button" id="back"><br>&nbsp;&nbsp;&nbsp;&laquo;&nbsp;&nbsp;&nbsp;</button>
+            </div>
+
+            <div class="w3-col" style="width: 25%;">
+                <button class="button btn-blue" id="restore">Restore <br>edge</button>
+            </div>
+
+            <div class="w3-col" style="width: 25%;">
+                <button class="button btn-red" id="remove">Remove <br>edge</button>
+            </div>
+
+            <div class="w3-col" style="width: 25%;">
+                <button class="button" id="next"><br>&nbsp;&nbsp;&nbsp;&raquo;&nbsp;&nbsp;&nbsp;</button>
+            </div>
+        </div>
+
+        <div class="w3-row w3-center controls w3-hide-large" style="top: 102%">
+            <div class="w3-col" style="width: 25%;">
+                <label class="custom-file-upload">
+                    <input type="file" id="file-input" />Upload <br>JSON</input>
+                </label>
+            </div>
+
+            <div class="w3-col" style="width: 25%;">
+                <button class="custom-file-upload" id="save">Save <br>JSON</button>
+            </div>
+
+            <div class="w3-col" style="width: 25%;">
+                <label class="custom-file-upload cfu-color">
+                    <input type="file" id="file-convert-from-txt" >TSV <br>to JSON</input>
+                </label>
+            </div>
+
+            <div class="w3-col" style="width: 25%;">
+                <label class="custom-file-upload cfu-color">
+                    <input type="file" id="file-convert-from-json" />JSON <br>to TSV</input>
+                </label>
+            </div>
+        </div>
+
+        <div class="w3-row w3-center controls w3-hide-large" style="top: 117%">
+            <div class="w3-col l4 m4" style="width: 25%;">
+                <i class="fa fa-lock"></i>
+                <input type="checkbox" name='allow' id="allow-all">
+            </div>
+
+            <div class="w3-col" style="width: 25%;">
+                <input type="text" class="w3-input w3-border w3-round-large" id="current">
+            </div>
+
+            <div class="w3-col" style="width: 25%;">
+                from
+            </div>
+
+            <div class="w3-col" style="width: 22%;">
+                <input class="w3-input w3-border w3-round-large" type="text" id="max" disabled>
+            </div>
+        </div>
+
+        <div class="w3-row w3-center controls w3-hide-large" style="top: 123%">
+            <div class="w3-col l4 m4" style="width: 25%;">
+                <button type="button" class="button btn-blue" style="opacity: 0.5; cursor: default;" id="restoreall" disabled>Restore <br>ALL</button>
+            </div>
+
+            <div class="w3-col" style="width: 25%;">
+                <button type="button" class="button btn-red" style="opacity: 0.5; cursor: default;" id="removeall" disabled>Remove <br>ALL</button>
+            </div>
+
+            <div class="w3-col" style="width: 25%;">
+                <button class="button" id="textual">Print <br>Lexemes</button>
+            </div>
+
+            <div class="w3-col" style="width: 25%;">
+                <button class="button" id="treeness">Is it <br>&nbsp;&nbsp;tree?&nbsp;&nbsp;</button>
+            </div>
+        </div>
+
     </body>
 </html>

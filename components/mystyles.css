@@ -47,7 +47,7 @@ h1 {
 
 .btn-blue {background-color: #008CBA;}
 .btn-red {background-color: #f44336;}
-.btn-black {background-color: black; float: left; margin: 8px 8px 0px 8px}
+.btn-black {background-color: black; float: left; margin: 2px 2px 0px 2px}
 
 input[type="file"] {
     display: none;
