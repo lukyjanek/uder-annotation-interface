@@ -152,6 +152,7 @@
                     cur_fam -= 1;
                     display(families[cur_fam]);
                     $('#current').val(cur_fam + 1);
+                    $('#current-small').val(cur_fam + 1);
                     setStyle();
                 }
             };
@@ -163,6 +164,7 @@
                     cur_fam += 1;
                     display(families[cur_fam]);
                     $('#current').val(cur_fam + 1);
+                    $('#current-small').val(cur_fam + 1);
                     setStyle();
                 }
             };
@@ -250,9 +252,9 @@
                         var root = '';
                         for (var j = 0; j < components[i].length; j++) {
                             if (data_root[components[i][j]].length == 0 && root == '') { root = components[i][j] }
-                            else if (data_root[components[i][j]].length == 0) { $('#treeness').notify('NO', {className: 'error', position: 'top'}); return; }
+                            else if (data_root[components[i][j]].length == 0) { $('#treeness').notify('NO', {className: 'error', position: 'top'}); $('#treeness-small').notify('NO', {className: 'error', position: 'top'}); return; }
                         }
-                        if (root == '') { $('#treeness').notify('NO', {className: 'error', position: 'top'}); return; }
+                        if (root == '') { $('#treeness').notify('NO', {className: 'error', position: 'top'}); $('#treeness-small').notify('NO', {className: 'error', position: 'top'}); return; }
                         // initialisation for BFS
                         var seen_nodes = new Set();
                         var fifo = new Array();
@@ -260,14 +262,15 @@
                         // go through component and check treenes
                         while (Array.isArray(fifo) && fifo.length > 0) {
                             for (var child in data_treeness[fifo[0]]) {
-                                if (seen_nodes.has(data_treeness[fifo[0]][child]) || fifo.includes(data_treeness[fifo[0]][child])) { $('#treeness').notify('NO', {className: 'error', position: 'top'}); return; }
-                                if (fifo[0] == data_treeness[fifo[0]][child]) { $('#treeness').notify('NO', {className: 'error', position: 'top'}); return; }
+                                if (seen_nodes.has(data_treeness[fifo[0]][child]) || fifo.includes(data_treeness[fifo[0]][child])) { $('#treeness').notify('NO', {className: 'error', position: 'top'}); $('#treeness-small').notify('NO', {className: 'error', position: 'top'}); return; }
+                                if (fifo[0] == data_treeness[fifo[0]][child]) { $('#treeness').notify('NO', {className: 'error', position: 'top'}); $('#treeness-small').notify('NO', {className: 'error', position: 'top'}); return; }
                                 fifo.push(data_treeness[fifo[0]][child]);
                             }
                             seen_nodes.add(fifo.shift());
                         };
                     };
                     $('#treeness').notify('YES', {className: 'success', position: 'top'});
+                    $('#treeness-small').notify('YES', {className: 'success', position: 'top'});
                 }
             };
 
@@ -283,6 +286,111 @@
 
                 // WHEN: file is uploaded using file-convert-from-txt
                 $('#file-convert-from-txt').change(
+                    function(e) {
+                        var file = e.target.files[0];
+                        var reader = new FileReader();
+                        reader.onload = function(e) {
+                            // load data
+                            var data = e.target.result.split('\n');
+
+                            // convert data - cluster families
+                            var lexemes = {};
+                            var clusters = [];
+                            for (var i = 0; i < data.length; i++){
+                                var entry = data[i].split('\t');
+                                if (entry.length != 3) {
+                                    continue;
+                                };
+
+                                var target = dict_get(lexemes, entry[1], null);
+                                var source = dict_get(lexemes, entry[2], null);
+
+                                if (target == null && source == null) {
+                                    lexemes[entry[1]] = clusters.length;
+                                    lexemes[entry[2]] = clusters.length;
+                                    clusters.push([entry]);
+
+                                } else if (source == null) {
+                                    lexemes[entry[2]] = target;
+                                    clusters[target].push(entry);
+
+                                } else if (target == null) {
+                                    lexemes[entry[1]] = source;
+                                    clusters[source].push(entry);
+
+                                } else if (target == source) {
+                                    clusters[target].push(entry);
+
+                                } else {
+                                    for (var j = 0; j < clusters[source].length; j++) {
+                                        clusters[target].push(clusters[source][j]);
+                                        lexemes[clusters[source][j][1]] = target;
+                                        lexemes[clusters[source][j][2]] = target;
+                                    };
+                                    clusters[source] = null;
+                                    clusters[target].push(entry);
+                                    lexemes[entry[2]] = target;
+                                };
+                            };
+
+                            // convert data - re-formate to object
+                            var json = [];
+                            for (var i = 0; i < clusters.length; i++) {
+                                if (clusters[i] != null) {
+                                    var item = {'edges': [], 'nodes': []};
+                                    var seen_nodes = [];
+                                    var seen_edges = [];
+                                    for (var j = 0; j < clusters[i].length; j++) {
+                                        // edges
+                                        if (!(seen_edges.includes(clusters[i][j]))) {
+                                            var mark;
+                                            if (clusters[i][j][0] == '+'){
+                                                mark = 'solid';
+                                            } else {
+                                                mark = 'dotted';
+                                            };
+                                            var relation = {"data": {"target": clusters[i][j][1], "intoTree": mark, "source": clusters[i][j][2]}};
+                                            item['edges'].push(relation);
+                                            seen_edges.push(clusters[i][j]);
+                                        };
+                                        // nodes
+                                        if (!(seen_nodes.includes(clusters[i][j][1]))) {
+                                            var node = {"data": {"name": clusters[i][j][1], "id": clusters[i][j][1]}};
+                                            item['nodes'].push(node);
+                                            seen_nodes.push(clusters[i][j][1]);
+                                        };
+                                        if (!(seen_nodes.includes(clusters[i][j][2]))) {
+                                            var node = {"data": {"name": clusters[i][j][2], "id": clusters[i][j][2]}};
+                                            item['nodes'].push(node);
+                                            seen_nodes.push(clusters[i][j][2]);
+                                        };
+                                    };
+                                    json.push(item);
+                                };
+                            };
+
+                            // save data
+                            var a = document.createElement('a');
+                            document.body.appendChild(a);
+                            a.style = 'display: none';
+                            var blob = new Blob([JSON.stringify(json)], {type: 'text/plain;charset=utf-8'});
+                            if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+                                window.navigator.msSaveOrOpenBlob(blob, 'text-converted-to-json.json');
+                            }
+                            else {
+                                var url = window.URL.createObjectURL(blob);
+                                a.href = url;
+                                a.download = 'text-converted-to-json.json';
+                                a.click();
+                                window.URL.revokeObjectURL(url);
+                            }
+
+                        };
+                        reader.readAsText(file);
+                    }
+                );
+
+                $('#file-convert-from-txt-small').change(
                     function(e) {
                         var file = e.target.files[0];
                         var reader = new FileReader();
@@ -439,6 +547,57 @@
                     }
                 );
 
+                $('#file-convert-from-json-small').change(
+                    function(e) {
+                        var file = e.target.files[0];
+                        var reader = new FileReader();
+                        reader.onload = function(e) {
+                            // load data
+                            var data = JSON.parse(e.target.result);
+
+                            // convert data
+                            var txt = [];
+                            for (var i = 0; i < data.length; i++) {
+                                for (var j = 0; j < data[i]['edges'].length; j++) {
+                                    var target = data[i]['edges'][j]['data']['target'];
+                                    var source = data[i]['edges'][j]['data']['source'];
+
+                                    var mark = data[i]['edges'][j]['data']['intoTree'];
+                                    if (mark == 'solid') {
+                                        mark = '+';
+                                    } else {
+                                        mark = '-';
+                                    };
+
+                                    txt.push([mark, target, source]);
+                                };
+                            };
+                            
+                            // save data
+                            var txt_to_save = '';
+                            for (var i = 0; i < txt.length; i++) {
+                                txt_to_save += txt[i].join('\t') + '\n';
+                            };
+
+                            var a = document.createElement('a');
+                            document.body.appendChild(a);
+                            a.style = 'display: none';
+                            var blob = new Blob([txt_to_save], {type: 'text/plain;charset=utf-8'});
+                            if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+                                window.navigator.msSaveOrOpenBlob(blob, 'json-converted-to-text.tsv');
+                            }
+                            else {
+                                var url = window.URL.createObjectURL(blob);
+                                a.href = url;
+                                a.download = 'json-converted-to-text.tsv';
+                                a.click();
+                                window.URL.revokeObjectURL(url);
+                            }
+                        };
+                        reader.readAsText(file);
+                    }
+                );
+
                 // WHEN: file is uploaded using file-button
                 $('#file-input').change(
                     function(e) {
@@ -449,7 +608,28 @@
                             max_fam = families.length;
                             display(families[cur_fam]);
                             $('#current').val(cur_fam + 1);
+                            $('#current-small').val(cur_fam + 1);
                             $('#max').val(max_fam);
+                            $('#max-small').val(max_fam);
+                            setStyle();
+                        };
+                        reader.readAsText(file);
+                        loaded = true;
+                    }
+                );
+
+                $('#file-input-small').change(
+                    function(e) {
+                        var file = e.target.files[0];
+                        var reader = new FileReader();
+                        reader.onload = function(e) {
+                            families = JSON.parse(e.target.result);
+                            max_fam = families.length;
+                            display(families[cur_fam]);
+                            $('#current').val(cur_fam + 1);
+                            $('#current-small').val(cur_fam + 1);
+                            $('#max').val(max_fam);
+                            $('#max-small').val(max_fam);
                             setStyle();
                         };
                         reader.readAsText(file);
@@ -458,58 +638,63 @@
                 );
 
                 // WHEN: data should be saved using save-button
-                $('#save').click(
-                    function(e) {
-                        saveFamily();
-                        var a = document.createElement('a');
-                        document.body.appendChild(a);
-                        a.style = 'display: none';
-                        var json = JSON.stringify(families);
-                        var blob = new Blob([json], {type: 'text/plain;charset=utf-8'});
-                        if (window.navigator && window.navigator.msSaveOrOpenBlob) {
-                            window.navigator.msSaveOrOpenBlob(blob, 'filename.json');
-                        }
-                        else {
-                            var url = window.URL.createObjectURL(blob);
-                            a.href = url;
-                            a.download = 'filename.json';
-                            a.click();
-                            window.URL.revokeObjectURL(url);
-                        }
+                function save_data() {
+                    saveFamily();
+                    var a = document.createElement('a');
+                    document.body.appendChild(a);
+                    a.style = 'display: none';
+                    var json = JSON.stringify(families);
+                    var blob = new Blob([json], {type: 'text/plain;charset=utf-8'});
+                    if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+                        window.navigator.msSaveOrOpenBlob(blob, 'filename.json');
                     }
-                );
+                    else {
+                        var url = window.URL.createObjectURL(blob);
+                        a.href = url;
+                        a.download = 'filename.json';
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                    }
+                };
+
+                $('#save').click(function(e) { save_data(); });
+                $('#save-small').click(function(e) { save_data(); });
 
                 // WHEN: click on remove-edge-button
                 $('#remove').click(function(e) { remove_selected_edges(); });
+                $('#remove-small').click(function(e) { remove_selected_edges(); });
 
                 // WHEN: click on restore-edge-button
                 $('#restore').click(function(e) { restore_selected_edges(); });
+                $('#restore-small').click(function(e) { restore_selected_edges(); });
 
                 // WHEN: click on removeall-edges-button
-                $('#removeall').click(
-                    function() {
-                        cy.$('edge').style('line-style', 'dotted');
-                        cy.$('edge').style('width', '1');
-                        cy.$('edge').style('source-arrow-shape', 'tee');
-                        cy.$('edge').data('intoTree', 'dotted');
-                    }
-                );
+                function remove_all() {
+                    cy.$('edge').style('line-style', 'dotted');
+                    cy.$('edge').style('width', '1');
+                    cy.$('edge').style('source-arrow-shape', 'tee');
+                    cy.$('edge').data('intoTree', 'dotted');
+                };
+                $('#removeall').click( function(e) { remove_all(); });
+                $('#removeall-small').click( function(e) { remove_all(); });
 
                 // WHEN: click on restoreall-edges-button
-                $('#restoreall').click(
-                    function() {
-                        cy.$('edge').style('line-style', 'solid');
-                        cy.$('edge').style('width', '2');
-                        cy.$('edge').style('source-arrow-shape', 'triangle');
-                        cy.$('edge').data('intoTree', 'solid');
-                    }
-                );
+                function restore_all() {
+                    cy.$('edge').style('line-style', 'solid');
+                    cy.$('edge').style('width', '2');
+                    cy.$('edge').style('source-arrow-shape', 'triangle');
+                    cy.$('edge').data('intoTree', 'solid');
+                };
+                $('#restoreall').click( function(e) {restore_all(); });
+                $('#restoreall-small').click( function(e) {restore_all(); });
 
                 // WHEN: click on left-button
                 $('#back').click(function(e) { previous_family(); });
+                $('#back-small').click(function(e) { previous_family(); });
 
                 // WHEN: click on right-button
                 $('#next').click(function(e) { next_family(); });
+                $('#next-small').click(function(e) { next_family(); });
 
                 // WHEN: change value in current-input
                 $('#current').keyup(function(e){
@@ -519,6 +704,7 @@
                             want = Number($('#current').val()) - 1;
                             if (want < 0 || want > max_fam - 1) {
                                 $('#current').val(cur_fam + 1)
+                                $('#current-small').val(cur_fam + 1)
                                 return;
                             }
                         }
@@ -526,6 +712,7 @@
                             want = searchLexeme(want);
                             if (want == null) {
                                 $('#current').val(cur_fam + 1);
+                                $('#current-small').val(cur_fam + 1);
                                 return;
                             }
                         }
@@ -533,25 +720,60 @@
                         display(families[want]);
                         cur_fam = want;
                         $('#current').val(cur_fam + 1);
+                        $('#current-small').val(cur_fam + 1);
                         setStyle();
+                        $('#current').blur();
+                        $('#current-small').blur();
+                    }
+                });
+
+                $('#current-small').keyup(function(e){
+                    if(loaded && e.keyCode == 13) {
+                        var want = $('#current-small').val().trim();
+                        if (Number(want)) {
+                            want = Number($('#current-small').val()) - 1;
+                            if (want < 0 || want > max_fam - 1) {
+                                $('#current-small').val(cur_fam + 1)
+                                $('#current').val(cur_fam + 1)
+                                return;
+                            }
+                        }
+                        else {
+                            want = searchLexeme(want);
+                            if (want == null) {
+                                $('#current-small').val(cur_fam + 1);
+                                $('#current').val(cur_fam + 1);
+                                return;
+                            }
+                        }
+                        saveFamily();
+                        display(families[want]);
+                        cur_fam = want;
+                        $('#current-small').val(cur_fam + 1);
+                        $('#current').val(cur_fam + 1);
+                        setStyle();
+                        $('#current-small').blur();
                         $('#current').blur();
                     }
                 });
 
                 // WHEN: click on lexemed-button
                 $('#textual').click(function(e) { list_lexemes() });
+                $('#textual-small').click(function(e) { list_lexemes() });
 
                 // WHEN: click on manual-button
                 $('#manual').click(function(e) { show_manual() });
 
                 // WHEN: click on demo-button
                 $('#demo').click(function(e) {
-                        var raw_data = '[ { "edges": [ {"data": {"target": "glatt_A", "intoTree": "solid", "source": "Gl\u00e4tte_Nf"}}, {"data": {"target": "glatt_A", "intoTree": "solid", "source": "gl\u00e4tten_V"}}, {"data": {"target": "gl\u00e4tten_V", "intoTree": "solid", "source": "Gl\u00e4tte_Nf"}}, {"data": {"target": "gl\u00e4tten_V", "intoTree": "solid", "source": "gl\u00e4ttend_A"}} ], "nodes": [ {"data": {"name": "gl\u00e4ttend_A", "id": "gl\u00e4ttend_A"}}, {"data": {"name": "Gl\u00e4tte_Nf", "id": "Gl\u00e4tte_Nf"}}, {"data": {"name": "glatt_A", "id": "glatt_A"}}, {"data": {"name": "gl\u00e4tten_V", "id": "gl\u00e4tten_V"}} ] }, { "edges": [ {"data": {"target": "Goldschmied_Nm", "intoTree": "solid", "source": "Goldschmiedin_Nf"}}, {"data": {"target": "Goldschmiede_Nm", "intoTree": "solid", "source": "Goldschmiedin_Nf"}} ], "nodes": [ {"data": {"name": "Goldschmiedin_Nf", "id": "Goldschmiedin_Nf"}}, {"data": {"name": "Goldschmied_Nm", "id": "Goldschmied_Nm"}}, {"data": {"name": "Goldschmiede_Nm", "id": "Goldschmiede_Nm"}} ] }, { "edges": [ {"data": {"target": "Anblasen_Nn", "intoTree": "solid", "source": "anblasen_V"}}, {"data": {"target": "Einblasen_Nn", "intoTree": "solid", "source": "einblasen_V"}}, {"data": {"target": "Ausblasen_Nn", "intoTree": "solid", "source": "ausblasen_V"}}, {"data": {"target": "blasen_V", "intoTree": "solid", "source": "blasend_A"}}, {"data": {"target": "blasen_V", "intoTree": "solid", "source": "einblasen_V"}}, {"data": {"target": "blasen_V", "intoTree": "solid", "source": "verblasen_V"}}, {"data": {"target": "blasen_V", "intoTree": "solid", "source": "Blase_Nf"}}, {"data": {"target": "blasen_V", "intoTree": "solid", "source": "anblasen_V"}}, {"data": {"target": "blasen_V", "intoTree": "solid", "source": "durchblasen_V"}}, {"data": {"target": "Blasen_Nn", "intoTree": "solid", "source": "Anblasen_Nn"}}, {"data": {"target": "Blasen_Nn", "intoTree": "solid", "source": "ausblasen_V"}}, {"data": {"target": "Blasen_Nn", "intoTree": "solid", "source": "\u00dcberblasen_Nn"}}, {"data": {"target": "Blasen_Nn", "intoTree": "solid", "source": "Ausblasen_Nn"}}, {"data": {"target": "Blasen_Nn", "intoTree": "solid", "source": "geblasen_A"}}, {"data": {"target": "Blasen_Nn", "intoTree": "solid", "source": "blasen_V"}}, {"data": {"target": "Blase_Nf", "intoTree": "solid", "source": "anblasen_V"}}, {"data": {"target": "Blase_Nf", "intoTree": "solid", "source": "ausblasen_V"}}, {"data": {"target": "Blase_Nf", "intoTree": "solid", "source": "verblasen_V"}}, {"data": {"target": "Blase_Nf", "intoTree": "solid", "source": "durchblasen_V"}}, {"data": {"target": "Blase_Nf", "intoTree": "solid", "source": "einblasen_V"}} ], "nodes": [ {"data": {"name": "blasend_A", "id": "blasend_A"}}, {"data": {"name": "\u00dcberblasen_Nn", "id": "\u00dcberblasen_Nn"}}, {"data": {"name": "Anblasen_Nn", "id": "Anblasen_Nn"}}, {"data": {"name": "anblasen_V", "id": "anblasen_V"}}, {"data": {"name": "Einblasen_Nn", "id": "Einblasen_Nn"}}, {"data": {"name": "Ausblasen_Nn", "id": "Ausblasen_Nn"}}, {"data": {"name": "blasen_V", "id": "blasen_V"}}, {"data": {"name": "durchblasen_V", "id": "durchblasen_V"}}, {"data": {"name": "einblasen_V", "id": "einblasen_V"}}, {"data": {"name": "ausblasen_V", "id": "ausblasen_V"}}, {"data": {"name": "verblasen_V", "id": "verblasen_V"}}, {"data": {"name": "Blasen_Nn", "id": "Blasen_Nn"}}, {"data": {"name": "geblasen_A", "id": "geblasen_A"}}, {"data": {"name": "Blase_Nf", "id": "Blase_Nf"}} ] }]'
+                        var raw_data = '[ { "edges":  [ {"data": {"target": "play_VERB", "intoTree": "solid", "source": "playing_NOUN"}},  {"data": {"target": "play_VERB", "intoTree": "solid", "source": "playing_ADJ"}},  {"data": {"target": "play_VERB", "intoTree": "solid", "source": "player_NOUN"}},  {"data": {"target": "play_VERB", "intoTree": "solid", "source": "play_NOUN"}}, {"data": {"target": "play_NOUN", "intoTree": "solid", "source": "player_NOUN"}}, {"data": {"target": "play_NOUN", "intoTree": "solid", "source": "playing_NOUN"}} ],  "nodes":  [ {"data": {"name": "play_VERB", "id": "play_VERB"}},  {"data": {"name": "play_NOUN", "id": "play_NOUN"}},  {"data": {"name": "playing_NOUN", "id": "playing_NOUN"}},  {"data": {"name": "playing_ADJ", "id": "playing_ADJ"}}, {"data": {"name": "player_NOUN", "id": "player_NOUN"}} ] },  { "edges":  [ {"data": {"target": "happify_VERB", "intoTree": "solid", "source": "happy_ADJ"}},  {"data": {"target": "happy_ADJ", "intoTree": "solid", "source": "happily_ADV"}},  {"data": {"target": "happy_ADJ", "intoTree": "solid", "source": "happiness_NOUN"}},  {"data": {"target": "happy_ADJ", "intoTree": "solid", "source": "happify_VERB"}} ],  "nodes":  [ {"data": {"name": "happy_ADJ", "id": "happy_ADJ"}},  {"data": {"name": "happily_ADV", "id": "happily_ADV"}},  {"data": {"name": "happiness_NOUN", "id": "happiness_NOUN"}},  {"data": {"name": "happify_VERB", "id": "happify_VERB"}} ] },  { "edges":  [ {"data": {"target": "buy_VERB", "intoTree": "solid", "source": "rebuy_VERB"}},  {"data": {"target": "buy_VERB", "intoTree": "solid", "source": "outbuy_VERB"}},  {"data": {"target": "buy_VERB", "intoTree": "solid", "source": "buyer_NOUN"}},  {"data": {"target": "buy_VERB", "intoTree": "solid", "source": "buying_NOUN"}}, {"data": {"target": "buy_VERB", "intoTree": "solid", "source": "buyable_ADJ"}}, {"data": {"target": "rebuy_VERB", "intoTree": "solid", "source": "rebuying_NOUN"}}, {"data": {"target": "rebuy_VERB", "intoTree": "solid", "source": "rebuyable_ADJ"}}, {"data": {"target": "rebuyable_ADJ", "intoTree": "solid", "source": "rebuyably_ADV"}}, {"data": {"target": "outbuy_VERB", "intoTree": "solid", "source": "outbuying_NOUN"}}, {"data": {"target": "buyable_ADJ", "intoTree": "solid", "source": "buyably_ADV"}}, {"data": {"target": "buyable_ADJ", "intoTree": "solid", "source": "unbuyable_ADJ"}}, {"data": {"target": "buy_VERB", "intoTree": "solid", "source": "buyably_ADV"}}, {"data": {"target": "buyer_NOUN", "intoTree": "solid", "source": "buying_NOUN"}}, {"data": {"target": "rebuy_VERB", "intoTree": "solid", "source": "outbuy_VERB"}}, {"data": {"target": "rebuying_NOUN", "intoTree": "solid", "source": "rebuyable_ADJ"}} ],  "nodes":  [ {"data": {"name": "buy_VERB", "id": "buy_VERB"}},  {"data": {"name": "rebuy_VERB", "id": "rebuy_VERB"}},  {"data": {"name": "outbuy_VERB", "id": "outbuy_VERB"}},  {"data": {"name": "buyer_NOUN", "id": "buyer_NOUN"}}, {"data": {"name": "buying_NOUN", "id": "buying_NOUN"}}, {"data": {"name": "outbuying_NOUN", "id": "outbuying_NOUN"}}, {"data": {"name": "rebuying_NOUN", "id": "rebuying_NOUN"}}, {"data": {"name": "buyable_ADJ", "id": "buyable_ADJ"}}, {"data": {"name": "rebuyable_ADJ", "id": "rebuyable_ADJ"}}, {"data": {"name": "buyably_ADV", "id": "buyably_ADV"}}, {"data": {"name": "rebuyably_ADV", "id": "rebuyably_ADV"}}, {"data": {"name": "unbuyable_ADJ", "id": "unbuyable_ADJ"}} ] }]';
                         families = JSON.parse(raw_data);
                         max_fam = families.length;
                         display(families[cur_fam]);
                         $('#current').val(cur_fam + 1);
+                        $('#current-small').val(cur_fam + 1);
                         $('#max').val(max_fam);
+                        $('#max-small').val(max_fam);
                         setStyle();
                         loaded = true;
                     });
@@ -561,6 +783,7 @@
 
                 // WHEN: click on treeness-button
                 $('#treeness').click(function(e) { check_treeness() });
+                $('#treeness-small').click(function(e) { check_treeness() });
 
                 // WHEN: push some key
                 $('body').keyup(function(e){
@@ -582,7 +805,7 @@
 
                 // WHEN: allow REMOVE/RESTORE ALL buttons
                 $('#allow-all').change(
-                    function(){
+                    function allow_all() {
                         if ($(this).is(':checked')) {
                             $('#restoreall').prop('disabled', false);
                             $('#restoreall').css('opacity', '1');
@@ -599,7 +822,30 @@
                             $('#removeall').css('opacity', '0.5');
                             $('#removeall').css('cursor', 'default');
                         }
-                });
+                    }
+                );
+
+                $('#allow-all-small').change(
+                    function allow_all() {
+                        if ($(this).is(':checked')) {
+                            $('#restoreall-small').prop('disabled', false);
+                            $('#restoreall-small').css('opacity', '1');
+                            $('#restoreall-small').css('cursor', 'pointer');
+                            $('#removeall-small').prop('disabled', false);
+                            $('#removeall-small').css('opacity', '1');
+                            $('#removeall-small').css('cursor', 'pointer');
+                        }
+                        else {
+                            $('#restoreall-small').prop('disabled', true);
+                            $('#restoreall-small').css('opacity', '0.5');
+                            $('#restoreall-small').css('cursor', 'default');
+                            $('#removeall-small').prop('disabled', true);
+                            $('#removeall-small').css('opacity', '0.5');
+                            $('#removeall-small').css('cursor', 'default');
+                        }
+                    }
+                );
+
             });
         </script>
     </head>
@@ -711,14 +957,14 @@
         </div>
 
         <div class="w3-row w3-center controls w3-hide-small w3-hide-medium">
-            <div class="w3-col" style="width: 30%;">
+            <div class="w3-col" style="width: 35%;">
                 <label class="custom-file-upload cfu-color">
                     <input type="file" id="file-convert-from-txt" >TSV <br>to JSON</input>
                 </label>
                 <label class="custom-file-upload">
-                    <input type="file" id="file-input" />Upload <br>JSON</input>
+                    <input type="file" id="file-input" />Upload JSON</input>
                 </label>
-                <button class="custom-file-upload" id="save">Save <br>JSON</button>
+                <button class="custom-file-upload" id="save">Save JSON</button>
                 <label class="custom-file-upload cfu-color">
                     <input type="file" id="file-convert-from-json" />JSON <br>to TSV</input>
                 </label>
@@ -731,7 +977,7 @@
                 <button class="button" id="next"><br>&raquo;</button>
             </div>
 
-            <div class="w3-col" style="width: 15%;">
+            <div class="w3-col" style="width: 10%;">
                 <input type="text" class="w3-input w3-border w3-round-large" id="current"> from <input class="w3-input w3-border w3-round-large" type="text" id="max" disabled>
             </div>
 
@@ -746,42 +992,44 @@
 
         <div class="w3-row w3-center controls w3-hide-large">
             <div class="w3-col" style="width: 25%;">
-                <button class="button" id="back"><br>&nbsp;&nbsp;&nbsp;&laquo;&nbsp;&nbsp;&nbsp;</button>
+                <strong style="font-size:30px">&darr;</strong>
+                <button class="button" id="back-small"><br>&nbsp;&nbsp;&nbsp;&laquo;&nbsp;&nbsp;&nbsp;</button>
             </div>
 
             <div class="w3-col" style="width: 25%;">
-                <button class="button btn-blue" id="restore">Restore <br>edge</button>
+                <button class="button btn-blue" id="restore-small">Restore <br>edge</button>
             </div>
 
             <div class="w3-col" style="width: 25%;">
-                <button class="button btn-red" id="remove">Remove <br>edge</button>
+                <button class="button btn-red" id="remove-small">Remove <br>edge</button>
             </div>
 
             <div class="w3-col" style="width: 25%;">
-                <button class="button" id="next"><br>&nbsp;&nbsp;&nbsp;&raquo;&nbsp;&nbsp;&nbsp;</button>
+                <button class="button" id="next-small"><br>&nbsp;&nbsp;&nbsp;&raquo;&nbsp;&nbsp;&nbsp;</button>
+                <strong style="font-size:30px">&darr;</strong>
             </div>
         </div>
 
         <div class="w3-row w3-center controls w3-hide-large" style="top: 102%">
             <div class="w3-col" style="width: 25%;">
                 <label class="custom-file-upload">
-                    <input type="file" id="file-input" />Upload <br>JSON</input>
+                    <input type="file" id="file-input-small" />Upload <br>JSON</input>
                 </label>
             </div>
 
             <div class="w3-col" style="width: 25%;">
-                <button class="custom-file-upload" id="save">Save <br>JSON</button>
+                <button class="custom-file-upload" id="save-small">Save <br>JSON</button>
             </div>
 
             <div class="w3-col" style="width: 25%;">
                 <label class="custom-file-upload cfu-color">
-                    <input type="file" id="file-convert-from-txt" >TSV <br>to JSON</input>
+                    <input type="file" id="file-convert-from-txt-small" >TSV <br>to JSON</input>
                 </label>
             </div>
 
             <div class="w3-col" style="width: 25%;">
                 <label class="custom-file-upload cfu-color">
-                    <input type="file" id="file-convert-from-json" />JSON <br>to TSV</input>
+                    <input type="file" id="file-convert-from-json-small" />JSON <br>to TSV</input>
                 </label>
             </div>
         </div>
@@ -789,11 +1037,11 @@
         <div class="w3-row w3-center controls w3-hide-large" style="top: 117%">
             <div class="w3-col l4 m4" style="width: 25%;">
                 <i class="fa fa-lock"></i>
-                <input type="checkbox" name='allow' id="allow-all">
+                <input type="checkbox" name='allow' id="allow-all-small">
             </div>
 
             <div class="w3-col" style="width: 25%;">
-                <input type="text" class="w3-input w3-border w3-round-large" id="current">
+                <input type="text" class="w3-input w3-border w3-round-large" id="current-small">
             </div>
 
             <div class="w3-col" style="width: 25%;">
@@ -801,25 +1049,25 @@
             </div>
 
             <div class="w3-col" style="width: 22%;">
-                <input class="w3-input w3-border w3-round-large" type="text" id="max" disabled>
+                <input class="w3-input w3-border w3-round-large" type="text" id="max-small" disabled>
             </div>
         </div>
 
         <div class="w3-row w3-center controls w3-hide-large" style="top: 123%">
             <div class="w3-col l4 m4" style="width: 25%;">
-                <button type="button" class="button btn-blue" style="opacity: 0.5; cursor: default;" id="restoreall" disabled>Restore <br>ALL</button>
+                <button type="button" class="button btn-blue" style="opacity: 0.5; cursor: default;" id="restoreall-small" disabled>Restore <br>ALL</button>
             </div>
 
             <div class="w3-col" style="width: 25%;">
-                <button type="button" class="button btn-red" style="opacity: 0.5; cursor: default;" id="removeall" disabled>Remove <br>ALL</button>
+                <button type="button" class="button btn-red" style="opacity: 0.5; cursor: default;" id="removeall-small" disabled>Remove <br>ALL</button>
             </div>
 
             <div class="w3-col" style="width: 25%;">
-                <button class="button" id="textual">Print <br>Lexemes</button>
+                <button class="button" id="textual-small">Print <br>Lexemes</button>
             </div>
 
             <div class="w3-col" style="width: 25%;">
-                <button class="button" id="treeness">Is it <br>&nbsp;&nbsp;tree?&nbsp;&nbsp;</button>
+                <button class="button" id="treeness-small">Is it <br>&nbsp;&nbsp;tree?&nbsp;&nbsp;</button>
             </div>
         </div>
 
