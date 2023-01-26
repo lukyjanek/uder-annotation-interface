@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>JDIM: Anotační nástroj</title>
+        <meta charset="UTF-8">
+        <meta name="description" content="Interface for manual annotation">
+        <meta name="keywords" content="UDer, Universal Derivations, annotation, word-formation, derivatioanl morphology">
+        <meta name="author" content="Lukáš Kyjánek">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+        <link rel="stylesheet" href="components/w3.css">
+        <link rel="stylesheet" href="components/mystyles.css">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+        <script src="components/cytoscape.min.js"></script>
+        <script src="components/jquery.min.js"></script>
+        <script src="components/notify.min.js"></script>
+
+        <script>
+            // define function for Internet Explorer
+            if (!String.prototype.startsWith) {
+                String.prototype.startsWith = function(searchString, position) {
+                    position = position || 0;
+                    return this.indexOf(searchString, position) === position;
+                };
+            };
+
+            // define method for Internet Explorer
+            if (!Array.prototype.includes) {
+                Object.defineProperty(Array.prototype, "includes", {
+                    enumerable: false,
+                    value: function(obj) {
+                        var newArr = this.filter(function(el) { return el == obj; });
+                        return newArr.length > 0;
+                    }
+                });
+            };
+
+
+            var families;  // list of word-formation families
+            var cy;  // current displayed family
+            var max_fam, cur_fam = 0; // number of all families, number of current displeyed family
+            var loaded = false;  // boolean, if any data is loaded
+            var selected_node_1 = '';  // selected node by user
+            var selected_node_2 = '';  // selected node by user
+            var restore_edge = false; // boolean, if it is prepared to restore edge
+
+            // func: display graph
+            function display(content) {
+                cy = cytoscape({
+                    // increace performance
+                    motionBlur: true,  // increase perceived performance for little or no cost
+                    pixelRatio: 1,  // interpolate on high density displays instead of increasing resolution
+                    wheelSensitivity: 0.3, // sensitivity of the mouse wheel (zooming)
+                    textureOnViewport: true,  // use a bitmap during interaction
+                    hideEdgesOnViewport: true,  // hide edges of the graph during interaction
+                    hideLabelsOnViewport: true,  // hide labels of the graph during interaction
+                    // display
+                    container: $('#cy'),
+                    layout: { name: 'preset' },
+                    style: [{
+                            // node properties
+                            selector: 'node[id]',
+                            style:  {
+                                        'content': 'data(id)',
+                                        'shape': 'ellipse',
+                                        'width': '25%',
+                                        'height': '25%'
+                                    }
+                            },
+                            {
+                            // edge properties
+                            selector: 'edge',
+                            style:  {
+                                        'curve-style': 'unbundled-bezier',
+                                        'line-style': 'data(intoTree)',
+                                        'target-arrow-shape': 'none',
+                                        'source-arrow-shape': 'tee',
+                                    }
+                            }],
+                    elements: content
+                });
+
+                saveFamily();
+
+                // WHEN: user clicked on node or background
+                cy.on('tap', 'node', function(evt){
+                    if (selected_node_1 == ''){
+                        selected_node_1 = this.id();
+                    } else if (selected_node_2 == '') {
+                        selected_node_2 = this.id();
+                    } else if (restore_edge == true && selected_node_1 != '' && selected_node_2 != '') {
+                        selected_node_1 = selected_node_2;
+                        selected_node_2 = this.id();
+                    } else {
+                        selected_node_1 = this.id();
+                        selected_node_2 = '';
+                    };
+
+                    if (restore_edge == true && selected_node_1 != '' && selected_node_2 != ''){
+                        for (var i = 0; i < families[cur_fam]['edges'].length; i++) {
+                            if (families[cur_fam]['edges'][i]['data']['source'] === selected_node_1 && families[cur_fam]['edges'][i]['data']['target'] === selected_node_2){
+                                families[cur_fam]['edges'][i]['data']['intoTree'] = 'solid';
+                                break;
+                            }
+                        };
+                        restore_edge = false;
+                        selected_node_1 = '';
+                        selected_node_2 = '';
+                        display(families[cur_fam]);
+                        cy.$('[intoTree = "solid"]').style('width', '2');
+                        cy.$('[intoTree = "solid"]').style('source-arrow-shape', 'triangle');
+                        cy.$('[intoTree = "dotted"]').style('width', '0');
+                        cy.$('[intoTree = "dotted"]').style('source-arrow-shape', 'tee');
+                    };
+
+                });
+
+                cy.on('tap', function(evt){
+                    var evtTarget = evt.target;
+                    if( evtTarget === cy ){
+                        selected_node_1 = '';
+                        selected_node_2 = '';
+                        restore_edge = false;
+                    }
+                });
+            };
+
+            // func: set style of the displaying graphs 
+            function setStyle() {
+                cy.$('[intoTree = "solid"]').style('width', '2');
+                cy.$('[intoTree = "solid"]').style('source-arrow-shape', 'triangle');
+                cy.$('[intoTree = "dotted"]').style('width', '0');
+                cy.$('[intoTree = "dotted"]').style('source-arrow-shape', 'tee');
+                for (var i = 0; i < families[cur_fam]['nodes'].length; i++) {
+                    if ('position' in families[cur_fam]['nodes'][i]) {
+                        var x = families[cur_fam]['nodes'][i]['position']['x'];
+                        var y = families[cur_fam]['nodes'][i]['position']['y'];
+                        if (x == 0) { x = Math.round(Math.random()*200) }
+                        if (y == 0) { y = Math.round(Math.random()*200) }
+                        cy.nodes('[id = "' + families[cur_fam]['nodes'][i]['data']['id'] + '"]').position('x', x);
+                        cy.nodes('[id = "' + families[cur_fam]['nodes'][i]['data']['id'] + '"]').position('y', y);
+                    }
+                    else {
+                        cy.nodes('[id = "' + families[cur_fam]['nodes'][i]['data']['id'] + '"]').position('x', Math.round(Math.random()*600));
+                        cy.nodes('[id = "' + families[cur_fam]['nodes'][i]['data']['id'] + '"]').position('y', Math.round(Math.random()*600));
+                    }
+                };
+                cy.fit(cy.$('node'));
+            };
+
+            // func: save current family before switching to another
+            function saveFamily() {
+                var data = cy.json(flatEles=false).elements;
+                // clean unnecessary features and round positions
+                var feats = ['group', 'removed', 'selected', 'selectable', 'locked', 'grabbable', 'pannable', 'classes'];
+                for (var i = 0; i < data.nodes.length; i++) {
+                    for (var j = 0; j < feats.length; j++) { delete data.nodes[i][feats[j]]; };
+                    data.nodes[i]['position']['x'] = Math.round(data.nodes[i]['position']['x']);
+                    data.nodes[i]['position']['y'] = Math.round(data.nodes[i]['position']['y']);
+                };
+                for (var i = 0; i < data.edges.length; i++) {
+                    for (var j = 0; j < feats.length; j++) { delete data.edges[i][feats[j]]; }
+                    delete data.edges[i]['data'].id;
+                    delete data.edges[i].position;
+                };
+                families[cur_fam] = data;
+            };
+
+            // func: search family containing given string, return index or null
+            function searchLexeme(lexeme) {
+                for (var i = 0; i < families.length; i++) {
+                    for (var j = 0; j < families[i]['nodes'].length; j++) {
+                        if (families[i]['nodes'][j]['data']['id'].startsWith(lexeme)) { return i; }
+                    }
+                }
+                return null;
+            };
+
+            // func: remove selected edges
+            function remove_selected_edges() {
+                cy.$('edge:selected').style('line-style', 'dotted');
+                cy.$('edge:selected').style('width', '0');
+                cy.$('edge:selected').style('source-arrow-shape', 'tee');
+                cy.$('edge:selected').data('intoTree', 'dotted');
+                saveFamily();
+            };
+
+            // func: restore selected edges
+            function restore_selected_edges() {
+                saveFamily();
+                restore_edge = true;
+            };
+
+            // func: switch to display previous family
+            function previous_family() {
+                saveFamily();
+                restore_edge = false;
+                selected_node_1 = '';
+                selected_node_2 = '';
+                if (cur_fam - 1 >= 0) {
+                    cur_fam -= 1;
+                    display(families[cur_fam]);
+                    $('#current').val(cur_fam + 1);
+                    $('#current-small').val(cur_fam + 1);
+                    setStyle();
+                }
+            };
+
+            // func: switch to display next family
+            function next_family() {
+                saveFamily();
+                restore_edge = false;
+                selected_node_1 = '';
+                selected_node_2 = '';
+                if (cur_fam + 1 < max_fam) { 
+                    cur_fam += 1;
+                    display(families[cur_fam]);
+                    $('#current').val(cur_fam + 1);
+                    $('#current-small').val(cur_fam + 1);
+                    setStyle();
+                }
+            };
+
+            // func: list all lexemes from displayed family
+            function list_lexemes() {
+                if (loaded) {
+                    $('#infowindow').css('display', 'block');
+                    var lemmas = new Set();
+                    for (var i = 0; i < families[cur_fam]['edges'].length; i++) {
+                        lemmas.add(families[cur_fam]['edges'][i]['data']['source']);
+                        lemmas.add(families[cur_fam]['edges'][i]['data']['target']);
+                    };
+
+                    var output = new Array();
+                    lemmas.forEach(function(item) { output.push(item); });
+                    $('#info_text').text(output.join(' '));
+                }
+            };
+
+            // func: show manual
+            function show_manual() {
+                $('#manualwindow').css('display', 'block');
+            };
+
+            // func: close information window
+            function close_info() { $('#infowindow').css('display', 'none'); $('#manualwindow').css('display', 'none'); };
+
+            // func: check if displayed family is already tree (or all its components are trees)
+            function check_correctness() {
+                saveFamily();
+                var json = JSON.stringify([families[cur_fam]]);
+                var data = JSON.parse(json);
+                var txt = [];
+                for (var i = 0; i < data.length; i++) {
+                    for (var j = 0; j < data[i]['edges'].length; j++) {
+                        var target = data[i]['edges'][j]['data']['target'];
+                        var source = data[i]['edges'][j]['data']['source'];
+
+                        var mark = data[i]['edges'][j]['data']['intoTree'];
+                        if (mark == 'solid') {
+                            mark = '+';
+                        } else {
+                            mark = '-';
+                        };
+
+                        txt.push([mark, target, source]);
+                    };
+                };
+
+                const correct = [{'hráčka':{'hráč': '-','hrát': '-','hravý': '-','hřiště': '-','přehrát': '-','přehraný': '-'}, 'hráč':{'hráčka': '+','hrát': '-','hravý': '-','hřiště': '-','přehrát': '-','přehraný': '-'}, 'hrát':{'hráčka': '-','hráč': '+','hravý': '+','hřiště': '+','přehrát': '+','přehraný': '-'}, 'hravý':{'hráčka': '-','hráč': '-','hrát': '-','hřiště': '-','přehrát': '-','přehraný': '-'}, 'hřiště':{'hráčka': '-','hráč': '-','hrát': '-','hravý': '-','přehrát': '-','přehraný': '-'}, 'přehrát':{'hráčka': '-','hráč': '-','hrát': '-','hravý': '-','hřiště': '-','přehraný': '+'}, 'přehraný':{'hráčka': '-','hráč': '-','hrát': '-','hravý': '-','hřiště': '-','přehrát': '-'}}, {'růst':{'rostoucí': '+','rostlý': '+','přirůst': '+','přirostlý': '-','nerost': '+'}, 'rostoucí':{'růst': '-','rostlý': '-','přirůst': '-','přirostlý': '-','nerost': '-'}, 'rostlý':{'růst': '-','rostoucí': '-','přirůst': '-','přirostlý': '-','nerost': '-'}, 'přirůst':{'růst': '-','rostoucí': '-','rostlý': '-','přirostlý': '+','nerost': '-'}, 'přirostlý':{'růst': '-','rostoucí': '-','rostlý': '-','přirůst': '-','nerost': '-'}, 'nerost':{'růst': '-','rostoucí': '-','rostlý': '-','přirůst': '-','přirostlý': '-'}},{'les': {'zalesnit': '+', 'zálesí': '+', 'lesík': '+', 'lesní': '+'},'zalesnit': {'les': '-', 'zálesí': '-', 'lesík': '-', 'lesní': '-'},'zálesí': {'les': '-', 'zalesnit': '-', 'lesík': '-', 'lesní': '-'},'lesík': {'les': '-', 'zalesnit': '-', 'zálesí': '-', 'lesní': '-'},'lesní': {'les': '-', 'zalesnit': '-', 'zálesí': '-', 'lesík': '-'}}, {'informatika': {'informace': '-', 'informační': '-', 'informatik': '+', 'informatička': '-', 'informatikův': '-', 'informatický': '+'},'informace': {'informatika': '+', 'informační': '+', 'informatik': '-', 'informatička': '-', 'informatikův': '-', 'informatický': '-'},'informační': {'informatika': '-', 'informace': '-', 'informatik': '-', 'informatička': '-', 'informatikův': '-', 'informatický': '-'},'informatik': {'informatika': '-', 'informace': '-', 'informační': '-', 'informatička': '+', 'informatikův': '+', 'informatický': '-'},'informatička': {'informatika': '-', 'informace': '-', 'informační': '-', 'informatik': '-', 'informatikův': '-', 'informatický': '-'},'informatikův': {'informatika': '-', 'informace': '-', 'informační': '-', 'informatik': '-', 'informatička': '-', 'informatický': '-'},'informatický': {'informatika': '-', 'informace': '-', 'informační': '-', 'informatik': '-', 'informatička': '-', 'informatikův': '-'}}, {'vidět':{'vídat': '+', 'závidět': '+', 'uvidět': '+', 'nenávidět': '+', 'vídaný': '-', 'předvídat': '-', 'vídání': '-', 'znenávidět': '-', 'nenáviděný': '-', 'nenávist': '-', 'vidomý': '+', 'nevidomý': '-'},'vídat':{'vidět': '-', 'závidět': '-', 'uvidět': '-', 'nenávidět': '-', 'vídaný': '+', 'předvídat': '+', 'vídání': '+', 'znenávidět': '-', 'nenáviděný': '-', 'nenávist': '-', 'vidomý': '-', 'nevidomý': '-'},'závidět':{'vidět': '-', 'vídat': '-', 'uvidět': '-', 'nenávidět': '-', 'vídaný': '-', 'předvídat': '-', 'vídání': '-', 'znenávidět': '-', 'nenáviděný': '-', 'nenávist': '-', 'vidomý': '-', 'nevidomý': '-'},'uvidět':{'vidět': '-', 'vídat': '-', 'závidět': '-', 'nenávidět': '-', 'vídaný': '-', 'předvídat': '-', 'vídání': '-', 'znenávidět': '-', 'nenáviděný': '-', 'nenávist': '-', 'vidomý': '-', 'nevidomý': '-'},'nenávidět':{'vidět': '-', 'vídat': '-', 'závidět': '-', 'uvidět': '-', 'vídaný': '-', 'předvídat': '-', 'vídání': '-', 'znenávidět': '+', 'nenáviděný': '+', 'nenávist': '+', 'vidomý': '-', 'nevidomý': '-'},'vídaný':{'vidět': '-', 'vídat': '-', 'závidět': '-', 'uvidět': '-', 'nenávidět': '-', 'předvídat': '-', 'vídání': '-', 'znenávidět': '-', 'nenáviděný': '-', 'nenávist': '-', 'vidomý': '-', 'nevidomý': '-'},'předvídat':{'vidět': '-', 'vídat': '-', 'závidět': '-', 'uvidět': '-', 'nenávidět': '-', 'vídaný': '-', 'vídání': '-', 'znenávidět': '-', 'nenáviděný': '-', 'nenávist': '-', 'vidomý': '-', 'nevidomý': '-'},'vídání':{'vidět': '-', 'vídat': '-', 'závidět': '-', 'uvidět': '-', 'nenávidět': '-', 'vídaný': '-', 'předvídat': '-', 'znenávidět': '-', 'nenáviděný': '-', 'nenávist': '-', 'vidomý': '-', 'nevidomý': '-'},'znenávidět':{'vidět': '-', 'vídat': '-', 'závidět': '-', 'uvidět': '-', 'nenávidět': '-', 'vídaný': '-', 'předvídat': '-', 'vídání': '-', 'nenáviděný': '-', 'nenávist': '-', 'vidomý': '-', 'nevidomý': '-'},'nenáviděný':{'vidět': '-', 'vídat': '-', 'závidět': '-', 'uvidět': '-', 'nenávidět': '-', 'vídaný': '-', 'předvídat': '-', 'vídání': '-', 'znenávidět': '-', 'nenávist': '-', 'vidomý': '-', 'nevidomý': '-'},'nenávist':{'vidět': '-', 'vídat': '-', 'závidět': '-', 'uvidět': '-', 'nenávidět': '-', 'vídaný': '-', 'předvídat': '-', 'vídání': '-', 'znenávidět': '-', 'nenáviděný': '-', 'vidomý': '-', 'nevidomý': '-'},'vidomý':{'vidět': '-', 'vídat': '-', 'závidět': '-', 'uvidět': '-', 'nenávidět': '-', 'vídaný': '-', 'předvídat': '-', 'vídání': '-', 'znenávidět': '-', 'nenáviděný': '-', 'nenávist': '-', 'nevidomý': '+'},'nevidomý':{'vidět': '-', 'vídat': '-', 'závidět': '-', 'uvidět': '-', 'nenávidět': '-', 'vídaný': '-', 'předvídat': '-', 'vídání': '-', 'znenávidět': '-', 'nenáviděný': '-', 'nenávist': '-', 'vidomý': '-'}}]
+
+                const incorrect = [];
+                var c = true;
+                for (var i = 0; i < txt.length; i++) {
+                    if (correct[cur_fam][txt[i][1]][txt[i][2]] === txt[i][0]){
+                        continue;
+                    } else {
+                        c = false;
+                        incorrect.push(txt[i]);
+                    }
+                };
+
+                if (c === true){
+                    $('#correctness').notify('SPRÁVNĚ', {className: 'success', position: 'top'});
+                    $('#correctness-small').notify('SPRÁVNĚ', {className: 'success', position: 'top'});
+                } else {
+                    $('#correctness').notify('NESPRÁVNĚ', {className: 'error', position: 'top'});
+                    $('#correctness-small').notify('NESPRÁVNĚ', {className: 'error', position: 'top'});
+                    console.log(incorrect);
+                }
+            };
+
+            // func: check if displayed family is already tree (or all its components are trees)
+            function check_treeness() {
+                if (loaded) {
+                    // initialise data for counting components
+                    var data = new Object();
+                    for (var i = 0; i < families[cur_fam]['nodes'].length; i++) {
+                        data[families[cur_fam]['nodes'][i]['data']['id']] = new Array();
+                    };
+                    for (var i = 0; i < families[cur_fam]['edges'].length; i++) {
+                        if (families[cur_fam]['edges'][i]['data']['intoTree'] == 'solid') {
+                            data[families[cur_fam]['edges'][i]['data']['target']].push(families[cur_fam]['edges'][i]['data']['source']);
+                            data[families[cur_fam]['edges'][i]['data']['source']].push(families[cur_fam]['edges'][i]['data']['target']);
+                        }
+                    };
+
+                    // count components
+                    var components = new Array();
+                    for (var i = 0; i < Object.keys(data).length; i++) {
+                        // initialisation for BFS
+                        var seen_nodes = new Set();
+                        var fifo = new Array();
+                        fifo.push(Object.keys(data)[i]);
+                        // check if node is already counted in any component
+                        var inside = false;
+                        for (var j = 0; j < components.length; j++) { if (components[j].includes(fifo[0])) { inside = true; } }
+                        if (inside) { continue; }
+                        // go through graph
+                        while (Array.isArray(fifo) && fifo.length > 0) {
+                            for (var child in data[fifo[0]]) {
+                                if (!(seen_nodes.has(data[fifo[0]][child]))) { fifo.push(data[fifo[0]][child]); }
+                            }
+                            seen_nodes.add(fifo.shift());
+                        };
+                        // save component
+                        var output = new Array();
+                        seen_nodes.forEach(function(item) { output.push(item); });
+                        components.push(output);
+                    };
+
+                    // initialise data for checking treeness of each components
+                    var data_root = new Object();
+                    var data_treeness = new Object();
+                    for (var i = 0; i < families[cur_fam]['nodes'].length; i++) {
+                        data_root[families[cur_fam]['nodes'][i]['data']['id']] = new Array();
+                        data_treeness[families[cur_fam]['nodes'][i]['data']['id']] = new Array();
+                    };
+                    for (var i = 0; i < families[cur_fam]['edges'].length; i++) {
+                        if (families[cur_fam]['edges'][i]['data']['intoTree'] == 'solid') {
+                            data_treeness[families[cur_fam]['edges'][i]['data']['target']].push(families[cur_fam]['edges'][i]['data']['source']);
+                            data_root[families[cur_fam]['edges'][i]['data']['source']].push(families[cur_fam]['edges'][i]['data']['target']);
+                        }
+                    };
+
+                    // check treenes of each component
+                    for (var i = 0; i < components.length; i++) {
+                        // find root of the component (one root = OK, otherwise = non-tree component)
+                        var root = '';
+                        for (var j = 0; j < components[i].length; j++) {
+                            if (data_root[components[i][j]].length == 0 && root == '') { root = components[i][j] }
+                            else if (data_root[components[i][j]].length == 0) { $('#treeness').notify('NE', {className: 'error', position: 'top'}); $('#treeness-small').notify('NE', {className: 'error', position: 'top'}); return; }
+                        }
+                        if (root == '') { $('#treeness').notify('NE', {className: 'error', position: 'top'}); $('#treeness-small').notify('NE', {className: 'error', position: 'top'}); return; }
+                        // initialisation for BFS
+                        var seen_nodes = new Set();
+                        var fifo = new Array();
+                        fifo.push(root);
+                        // go through component and check treenes
+                        while (Array.isArray(fifo) && fifo.length > 0) {
+                            for (var child in data_treeness[fifo[0]]) {
+                                if (seen_nodes.has(data_treeness[fifo[0]][child]) || fifo.includes(data_treeness[fifo[0]][child])) { $('#treeness').notify('NE', {className: 'error', position: 'top'}); $('#treeness-small').notify('NE', {className: 'error', position: 'top'}); return; }
+                                if (fifo[0] == data_treeness[fifo[0]][child]) { $('#treeness').notify('NE', {className: 'error', position: 'top'}); $('#treeness-small').notify('NE', {className: 'error', position: 'top'}); return; }
+                                fifo.push(data_treeness[fifo[0]][child]);
+                            }
+                            seen_nodes.add(fifo.shift());
+                        };
+                    };
+                    $('#treeness').notify('ANO', {className: 'success', position: 'top'});
+                    $('#treeness-small').notify('ANO', {className: 'success', position: 'top'});
+                }
+            };
+
+            // funct: dictionary Pythonic .get(...)
+            function dict_get(object, key, default_value) {
+                var result = object[key];
+                return (typeof result !== "undefined") ? result : default_value;
+            }
+
+
+            // INITIALISE: document is fully loaded
+            $(document).ready(function(){
+
+                // load demo-data
+                var raw_data = '[{"edges":[{"data":{"target":"hráč","intoTree":"dotted","source":"hrát"}},{"data":{"target":"hrát","intoTree":"dotted","source":"hráč"}},{"data":{"target":"hrát","intoTree":"dotted","source":"hráčka"}},{"data":{"target":"hrát","intoTree":"dotted","source":"hravý"}},{"data":{"target":"hrát","intoTree":"dotted","source":"hřiště"}},{"data":{"target":"hrát","intoTree":"dotted","source":"přehrát"}},{"data":{"target":"hrát","intoTree":"dotted","source":"přehraný"}},{"data":{"target":"hráč","intoTree":"dotted","source":"hráčka"}},{"data":{"target":"hráč","intoTree":"dotted","source":"hravý"}},{"data":{"target":"hráč","intoTree":"dotted","source":"hřiště"}},{"data":{"target":"hráč","intoTree":"dotted","source":"přehrát"}},{"data":{"target":"hráč","intoTree":"dotted","source":"přehraný"}},{"data":{"target":"hráčka","intoTree":"dotted","source":"hrát"}},{"data":{"target":"hráčka","intoTree":"dotted","source":"hráč"}},{"data":{"target":"hráčka","intoTree":"dotted","source":"hravý"}},{"data":{"target":"hráčka","intoTree":"dotted","source":"hřiště"}},{"data":{"target":"hráčka","intoTree":"dotted","source":"přehrát"}},{"data":{"target":"hráčka","intoTree":"dotted","source":"přehraný"}},{"data":{"target":"hravý","intoTree":"dotted","source":"hrát"}},{"data":{"target":"hravý","intoTree":"dotted","source":"hráč"}},{"data":{"target":"hravý","intoTree":"dotted","source":"hráčka"}},{"data":{"target":"hravý","intoTree":"dotted","source":"hřiště"}},{"data":{"target":"hravý","intoTree":"dotted","source":"přehrát"}},{"data":{"target":"hravý","intoTree":"dotted","source":"přehraný"}},{"data":{"target":"hřiště","intoTree":"dotted","source":"hrát"}},{"data":{"target":"hřiště","intoTree":"dotted","source":"hráč"}},{"data":{"target":"hřiště","intoTree":"dotted","source":"hráčka"}},{"data":{"target":"hřiště","intoTree":"dotted","source":"hravý"}},{"data":{"target":"hřiště","intoTree":"dotted","source":"přehrát"}},{"data":{"target":"hřiště","intoTree":"dotted","source":"přehraný"}},{"data":{"target":"přehrát","intoTree":"dotted","source":"hrát"}},{"data":{"target":"přehrát","intoTree":"dotted","source":"hráč"}},{"data":{"target":"přehrát","intoTree":"dotted","source":"hráčka"}},{"data":{"target":"přehrát","intoTree":"dotted","source":"hravý"}},{"data":{"target":"přehrát","intoTree":"dotted","source":"hřiště"}},{"data":{"target":"přehrát","intoTree":"dotted","source":"přehraný"}},{"data":{"target":"přehraný","intoTree":"dotted","source":"hrát"}},{"data":{"target":"přehraný","intoTree":"dotted","source":"hráč"}},{"data":{"target":"přehraný","intoTree":"dotted","source":"hráčka"}},{"data":{"target":"přehraný","intoTree":"dotted","source":"hravý"}},{"data":{"target":"přehraný","intoTree":"dotted","source":"hřiště"}},{"data":{"target":"přehraný","intoTree":"dotted","source":"přehrát"}}],"nodes":[{"data":{"name":"hráč","id":"hráč"}},{"data":{"name":"hrát","id":"hrát"}},{"data":{"name":"hrát","id":"hrát"}},{"data":{"name":"hráč","id":"hráč"}},{"data":{"name":"hráčka","id":"hráčka"}},{"data":{"name":"hravý","id":"hravý"}},{"data":{"name":"hřiště","id":"hřiště"}},{"data":{"name":"přehrát","id":"přehrát"}},{"data":{"name":"přehraný","id":"přehraný"}},{"data":{"name":"hráčka","id":"hráčka"}},{"data":{"name":"hravý","id":"hravý"}},{"data":{"name":"hřiště","id":"hřiště"}},{"data":{"name":"přehrát","id":"přehrát"}},{"data":{"name":"přehraný","id":"přehraný"}}]},{"edges":[{"data":{"target":"rostoucí","intoTree":"dotted","source":"růst"}},{"data":{"target":"růst","intoTree":"dotted","source":"rostoucí"}},{"data":{"target":"růst","intoTree":"dotted","source":"rostlý"}},{"data":{"target":"růst","intoTree":"dotted","source":"přirůst"}},{"data":{"target":"růst","intoTree":"dotted","source":"přirostlý"}},{"data":{"target":"růst","intoTree":"dotted","source":"nerost"}},{"data":{"target":"rostoucí","intoTree":"dotted","source":"rostlý"}},{"data":{"target":"rostoucí","intoTree":"dotted","source":"přirůst"}},{"data":{"target":"rostoucí","intoTree":"dotted","source":"přirostlý"}},{"data":{"target":"rostoucí","intoTree":"dotted","source":"nerost"}},{"data":{"target":"rostlý","intoTree":"dotted","source":"růst"}},{"data":{"target":"rostlý","intoTree":"dotted","source":"rostoucí"}},{"data":{"target":"rostlý","intoTree":"dotted","source":"přirůst"}},{"data":{"target":"rostlý","intoTree":"dotted","source":"přirostlý"}},{"data":{"target":"rostlý","intoTree":"dotted","source":"nerost"}},{"data":{"target":"přirůst","intoTree":"dotted","source":"růst"}},{"data":{"target":"přirůst","intoTree":"dotted","source":"rostoucí"}},{"data":{"target":"přirůst","intoTree":"dotted","source":"rostlý"}},{"data":{"target":"přirůst","intoTree":"dotted","source":"přirostlý"}},{"data":{"target":"přirůst","intoTree":"dotted","source":"nerost"}},{"data":{"target":"přirostlý","intoTree":"dotted","source":"růst"}},{"data":{"target":"přirostlý","intoTree":"dotted","source":"rostoucí"}},{"data":{"target":"přirostlý","intoTree":"dotted","source":"rostlý"}},{"data":{"target":"přirostlý","intoTree":"dotted","source":"přirůst"}},{"data":{"target":"přirostlý","intoTree":"dotted","source":"nerost"}},{"data":{"target":"nerost","intoTree":"dotted","source":"růst"}},{"data":{"target":"nerost","intoTree":"dotted","source":"rostoucí"}},{"data":{"target":"nerost","intoTree":"dotted","source":"rostlý"}},{"data":{"target":"nerost","intoTree":"dotted","source":"přirůst"}},{"data":{"target":"nerost","intoTree":"dotted","source":"přirostlý"}}],"nodes":[{"data":{"name":"rostoucí","id":"rostoucí"}},{"data":{"name":"růst","id":"růst"}},{"data":{"name":"růst","id":"růst"}},{"data":{"name":"rostoucí","id":"rostoucí"}},{"data":{"name":"rostlý","id":"rostlý"}},{"data":{"name":"přirůst","id":"přirůst"}},{"data":{"name":"přirostlý","id":"přirostlý"}},{"data":{"name":"nerost","id":"nerost"}},{"data":{"name":"rostlý","id":"rostlý"}},{"data":{"name":"přirůst","id":"přirůst"}},{"data":{"name":"přirostlý","id":"přirostlý"}},{"data":{"name":"nerost","id":"nerost"}}]},{"edges":[{"data":{"target":"zalesnit","intoTree":"dotted","source":"les"}},{"data":{"target":"les","intoTree":"dotted","source":"zalesnit"}},{"data":{"target":"les","intoTree":"dotted","source":"zálesí"}},{"data":{"target":"les","intoTree":"dotted","source":"lesík"}},{"data":{"target":"les","intoTree":"dotted","source":"lesní"}},{"data":{"target":"zalesnit","intoTree":"dotted","source":"zálesí"}},{"data":{"target":"zalesnit","intoTree":"dotted","source":"lesík"}},{"data":{"target":"zalesnit","intoTree":"dotted","source":"lesní"}},{"data":{"target":"zálesí","intoTree":"dotted","source":"les"}},{"data":{"target":"zálesí","intoTree":"dotted","source":"zalesnit"}},{"data":{"target":"zálesí","intoTree":"dotted","source":"lesík"}},{"data":{"target":"zálesí","intoTree":"dotted","source":"lesní"}},{"data":{"target":"lesík","intoTree":"dotted","source":"les"}},{"data":{"target":"lesík","intoTree":"dotted","source":"zalesnit"}},{"data":{"target":"lesík","intoTree":"dotted","source":"zálesí"}},{"data":{"target":"lesík","intoTree":"dotted","source":"lesní"}},{"data":{"target":"lesní","intoTree":"dotted","source":"les"}},{"data":{"target":"lesní","intoTree":"dotted","source":"zalesnit"}},{"data":{"target":"lesní","intoTree":"dotted","source":"zálesí"}},{"data":{"target":"lesní","intoTree":"dotted","source":"lesík"}}],"nodes":[{"data":{"name":"zalesnit","id":"zalesnit"}},{"data":{"name":"les","id":"les"}},{"data":{"name":"les","id":"les"}},{"data":{"name":"zalesnit","id":"zalesnit"}},{"data":{"name":"zálesí","id":"zálesí"}},{"data":{"name":"lesík","id":"lesík"}},{"data":{"name":"lesní","id":"lesní"}},{"data":{"name":"zálesí","id":"zálesí"}},{"data":{"name":"lesík","id":"lesík"}},{"data":{"name":"lesní","id":"lesní"}}]},{"edges":[{"data":{"target":"informatika","intoTree":"dotted","source":"informace"}},{"data":{"target":"informace","intoTree":"dotted","source":"informatika"}},{"data":{"target":"informace","intoTree":"dotted","source":"informační"}},{"data":{"target":"informace","intoTree":"dotted","source":"informatik"}},{"data":{"target":"informace","intoTree":"dotted","source":"informatička"}},{"data":{"target":"informace","intoTree":"dotted","source":"informatický"}},{"data":{"target":"informace","intoTree":"dotted","source":"informatikův"}},{"data":{"target":"informatika","intoTree":"dotted","source":"informační"}},{"data":{"target":"informatika","intoTree":"dotted","source":"informatik"}},{"data":{"target":"informatika","intoTree":"dotted","source":"informatička"}},{"data":{"target":"informatika","intoTree":"dotted","source":"informatický"}},{"data":{"target":"informatika","intoTree":"dotted","source":"informatikův"}},{"data":{"target":"informační","intoTree":"dotted","source":"informace"}},{"data":{"target":"informační","intoTree":"dotted","source":"informatika"}},{"data":{"target":"informační","intoTree":"dotted","source":"informatik"}},{"data":{"target":"informační","intoTree":"dotted","source":"informatička"}},{"data":{"target":"informační","intoTree":"dotted","source":"informatický"}},{"data":{"target":"informační","intoTree":"dotted","source":"informatikův"}},{"data":{"target":"informatik","intoTree":"dotted","source":"informace"}},{"data":{"target":"informatik","intoTree":"dotted","source":"informatika"}},{"data":{"target":"informatik","intoTree":"dotted","source":"informační"}},{"data":{"target":"informatik","intoTree":"dotted","source":"informatička"}},{"data":{"target":"informatik","intoTree":"dotted","source":"informatický"}},{"data":{"target":"informatik","intoTree":"dotted","source":"informatikův"}},{"data":{"target":"informatička","intoTree":"dotted","source":"informace"}},{"data":{"target":"informatička","intoTree":"dotted","source":"informatika"}},{"data":{"target":"informatička","intoTree":"dotted","source":"informační"}},{"data":{"target":"informatička","intoTree":"dotted","source":"informatik"}},{"data":{"target":"informatička","intoTree":"dotted","source":"informatický"}},{"data":{"target":"informatička","intoTree":"dotted","source":"informatikův"}},{"data":{"target":"informatický","intoTree":"dotted","source":"informace"}},{"data":{"target":"informatický","intoTree":"dotted","source":"informatika"}},{"data":{"target":"informatický","intoTree":"dotted","source":"informační"}},{"data":{"target":"informatický","intoTree":"dotted","source":"informatik"}},{"data":{"target":"informatický","intoTree":"dotted","source":"informatička"}},{"data":{"target":"informatický","intoTree":"dotted","source":"informatikův"}},{"data":{"target":"informatikův","intoTree":"dotted","source":"informace"}},{"data":{"target":"informatikův","intoTree":"dotted","source":"informatika"}},{"data":{"target":"informatikův","intoTree":"dotted","source":"informační"}},{"data":{"target":"informatikův","intoTree":"dotted","source":"informatik"}},{"data":{"target":"informatikův","intoTree":"dotted","source":"informatička"}},{"data":{"target":"informatikův","intoTree":"dotted","source":"informatický"}}],"nodes":[{"data":{"name":"informatika","id":"informatika"}},{"data":{"name":"informace","id":"informace"}},{"data":{"name":"informace","id":"informace"}},{"data":{"name":"informatika","id":"informatika"}},{"data":{"name":"informační","id":"informační"}},{"data":{"name":"informatik","id":"informatik"}},{"data":{"name":"informatička","id":"informatička"}},{"data":{"name":"informatický","id":"informatický"}},{"data":{"name":"informatikův","id":"informatikův"}},{"data":{"name":"informační","id":"informační"}},{"data":{"name":"informatik","id":"informatik"}},{"data":{"name":"informatička","id":"informatička"}},{"data":{"name":"informatický","id":"informatický"}},{"data":{"name":"informatikův","id":"informatikův"}}]},                {"edges":[{"data":{"target":"vídat","intoTree":"dotted","source":"vidět"}},{"data":{"target":"vidět","intoTree":"dotted","source":"vídat"}},{"data":{"target":"vidět","intoTree":"dotted","source":"závidět"}},{"data":{"target":"vidět","intoTree":"dotted","source":"uvidět"}},{"data":{"target":"vidět","intoTree":"dotted","source":"nenávidět"}},{"data":{"target":"vidět","intoTree":"dotted","source":"vídaný"}},{"data":{"target":"vidět","intoTree":"dotted","source":"předvídat"}},{"data":{"target":"vidět","intoTree":"dotted","source":"vídání"}},{"data":{"target":"vidět","intoTree":"dotted","source":"znenávidět"}},{"data":{"target":"vidět","intoTree":"dotted","source":"nenáviděný"}},{"data":{"target":"vidět","intoTree":"dotted","source":"nenávist"}},{"data":{"target":"vidět","intoTree":"dotted","source":"vidomý"}},{"data":{"target":"vidět","intoTree":"dotted","source":"nevidomý"}},{"data":{"target":"vídat","intoTree":"dotted","source":"závidět"}},{"data":{"target":"vídat","intoTree":"dotted","source":"uvidět"}},{"data":{"target":"vídat","intoTree":"dotted","source":"nenávidět"}},{"data":{"target":"vídat","intoTree":"dotted","source":"vídání"}},{"data":{"target":"vídat","intoTree":"dotted","source":"znenávidět"}},{"data":{"target":"vídat","intoTree":"dotted","source":"nenáviděný"}},{"data":{"target":"vídat","intoTree":"dotted","source":"nenávist"}},{"data":{"target":"vídat","intoTree":"dotted","source":"vidomý"}},{"data":{"target":"vídat","intoTree":"dotted","source":"nevidomý"}},{"data":{"target":"závidět","intoTree":"dotted","source":"vidět"}},{"data":{"target":"závidět","intoTree":"dotted","source":"vídat"}},{"data":{"target":"závidět","intoTree":"dotted","source":"uvidět"}},{"data":{"target":"závidět","intoTree":"dotted","source":"nenávidět"}},{"data":{"target":"závidět","intoTree":"dotted","source":"vídat"}},{"data":{"target":"závidět","intoTree":"dotted","source":"vídaný"}},{"data":{"target":"závidět","intoTree":"dotted","source":"předvídat"}},{"data":{"target":"závidět","intoTree":"dotted","source":"vídání"}},{"data":{"target":"závidět","intoTree":"dotted","source":"znenávidět"}},{"data":{"target":"závidět","intoTree":"dotted","source":"nenáviděný"}},{"data":{"target":"závidět","intoTree":"dotted","source":"nenávist"}},{"data":{"target":"závidět","intoTree":"dotted","source":"vidomý"}},{"data":{"target":"závidět","intoTree":"dotted","source":"nevidomý"}},{"data":{"target":"uvidět","intoTree":"dotted","source":"vidět"}},{"data":{"target":"uvidět","intoTree":"dotted","source":"vídat"}},{"data":{"target":"uvidět","intoTree":"dotted","source":"závidět"}},{"data":{"target":"uvidět","intoTree":"dotted","source":"nenávidět"}},{"data":{"target":"uvidět","intoTree":"dotted","source":"vídat"}},{"data":{"target":"uvidět","intoTree":"dotted","source":"vídaný"}},{"data":{"target":"uvidět","intoTree":"dotted","source":"předvídat"}},{"data":{"target":"uvidět","intoTree":"dotted","source":"vídání"}},{"data":{"target":"uvidět","intoTree":"dotted","source":"znenávidět"}},{"data":{"target":"uvidět","intoTree":"dotted","source":"nenáviděný"}},{"data":{"target":"uvidět","intoTree":"dotted","source":"nenávist"}},{"data":{"target":"uvidět","intoTree":"dotted","source":"vidomý"}},{"data":{"target":"uvidět","intoTree":"dotted","source":"nevidomý"}},{"data":{"target":"nenávidět","intoTree":"dotted","source":"vidět"}},{"data":{"target":"nenávidět","intoTree":"dotted","source":"vídat"}},{"data":{"target":"nenávidět","intoTree":"dotted","source":"závidět"}},{"data":{"target":"nenávidět","intoTree":"dotted","source":"uvidět"}},{"data":{"target":"nenávidět","intoTree":"dotted","source":"vídat"}},{"data":{"target":"nenávidět","intoTree":"dotted","source":"vídaný"}},{"data":{"target":"nenávidět","intoTree":"dotted","source":"předvídat"}},{"data":{"target":"nenávidět","intoTree":"dotted","source":"vídání"}},{"data":{"target":"nenávidět","intoTree":"dotted","source":"znenávidět"}},{"data":{"target":"nenávidět","intoTree":"dotted","source":"nenáviděný"}},{"data":{"target":"nenávidět","intoTree":"dotted","source":"nenávist"}},{"data":{"target":"nenávidět","intoTree":"dotted","source":"vidomý"}},{"data":{"target":"nenávidět","intoTree":"dotted","source":"nevidomý"}},{"data":{"target":"vídat","intoTree":"dotted","source":"vidět"}},{"data":{"target":"vídat","intoTree":"dotted","source":"závidět"}},{"data":{"target":"vídat","intoTree":"dotted","source":"uvidět"}},{"data":{"target":"vídat","intoTree":"dotted","source":"nenávidět"}},{"data":{"target":"vídat","intoTree":"dotted","source":"vídaný"}},{"data":{"target":"vídat","intoTree":"dotted","source":"předvídat"}},{"data":{"target":"vídat","intoTree":"dotted","source":"znenávidět"}},{"data":{"target":"vídat","intoTree":"dotted","source":"nenáviděný"}},{"data":{"target":"vídat","intoTree":"dotted","source":"nenávist"}},{"data":{"target":"vídat","intoTree":"dotted","source":"vidomý"}},{"data":{"target":"vídat","intoTree":"dotted","source":"nevidomý"}},{"data":{"target":"vídaný","intoTree":"dotted","source":"vidět"}},{"data":{"target":"vídaný","intoTree":"dotted","source":"vídat"}},{"data":{"target":"vídaný","intoTree":"dotted","source":"závidět"}},{"data":{"target":"vídaný","intoTree":"dotted","source":"uvidět"}},{"data":{"target":"vídaný","intoTree":"dotted","source":"nenávidět"}},{"data":{"target":"vídaný","intoTree":"dotted","source":"vídat"}},{"data":{"target":"vídaný","intoTree":"dotted","source":"předvídat"}},{"data":{"target":"vídaný","intoTree":"dotted","source":"vídání"}},{"data":{"target":"vídaný","intoTree":"dotted","source":"znenávidět"}},{"data":{"target":"vídaný","intoTree":"dotted","source":"nenáviděný"}},{"data":{"target":"vídaný","intoTree":"dotted","source":"nenávist"}},{"data":{"target":"vídaný","intoTree":"dotted","source":"vidomý"}},{"data":{"target":"vídaný","intoTree":"dotted","source":"nevidomý"}},{"data":{"target":"předvídat","intoTree":"dotted","source":"vidět"}},{"data":{"target":"předvídat","intoTree":"dotted","source":"vídat"}},{"data":{"target":"předvídat","intoTree":"dotted","source":"závidět"}},{"data":{"target":"předvídat","intoTree":"dotted","source":"uvidět"}},{"data":{"target":"předvídat","intoTree":"dotted","source":"nenávidět"}},{"data":{"target":"předvídat","intoTree":"dotted","source":"vídat"}},{"data":{"target":"předvídat","intoTree":"dotted","source":"vídaný"}},{"data":{"target":"předvídat","intoTree":"dotted","source":"vídání"}},{"data":{"target":"předvídat","intoTree":"dotted","source":"znenávidět"}},{"data":{"target":"předvídat","intoTree":"dotted","source":"nenáviděný"}},{"data":{"target":"předvídat","intoTree":"dotted","source":"nenávist"}},{"data":{"target":"předvídat","intoTree":"dotted","source":"vidomý"}},{"data":{"target":"předvídat","intoTree":"dotted","source":"nevidomý"}},{"data":{"target":"vídání","intoTree":"dotted","source":"vidět"}},{"data":{"target":"vídání","intoTree":"dotted","source":"vídat"}},{"data":{"target":"vídání","intoTree":"dotted","source":"závidět"}},{"data":{"target":"vídání","intoTree":"dotted","source":"uvidět"}},{"data":{"target":"vídání","intoTree":"dotted","source":"nenávidět"}},{"data":{"target":"vídání","intoTree":"dotted","source":"vídat"}},{"data":{"target":"vídání","intoTree":"dotted","source":"vídaný"}},{"data":{"target":"vídání","intoTree":"dotted","source":"předvídat"}},{"data":{"target":"vídání","intoTree":"dotted","source":"znenávidět"}},{"data":{"target":"vídání","intoTree":"dotted","source":"nenáviděný"}},{"data":{"target":"vídání","intoTree":"dotted","source":"nenávist"}},{"data":{"target":"vídání","intoTree":"dotted","source":"vidomý"}},{"data":{"target":"vídání","intoTree":"dotted","source":"nevidomý"}},{"data":{"target":"znenávidět","intoTree":"dotted","source":"vidět"}},{"data":{"target":"znenávidět","intoTree":"dotted","source":"vídat"}},{"data":{"target":"znenávidět","intoTree":"dotted","source":"závidět"}},{"data":{"target":"znenávidět","intoTree":"dotted","source":"uvidět"}},{"data":{"target":"znenávidět","intoTree":"dotted","source":"nenávidět"}},{"data":{"target":"znenávidět","intoTree":"dotted","source":"vídat"}},{"data":{"target":"znenávidět","intoTree":"dotted","source":"vídaný"}},{"data":{"target":"znenávidět","intoTree":"dotted","source":"předvídat"}},{"data":{"target":"znenávidět","intoTree":"dotted","source":"vídání"}},{"data":{"target":"znenávidět","intoTree":"dotted","source":"nenáviděný"}},{"data":{"target":"znenávidět","intoTree":"dotted","source":"nenávist"}},{"data":{"target":"znenávidět","intoTree":"dotted","source":"vidomý"}},{"data":{"target":"znenávidět","intoTree":"dotted","source":"nevidomý"}},{"data":{"target":"nenáviděný","intoTree":"dotted","source":"vidět"}},{"data":{"target":"nenáviděný","intoTree":"dotted","source":"vídat"}},{"data":{"target":"nenáviděný","intoTree":"dotted","source":"závidět"}},{"data":{"target":"nenáviděný","intoTree":"dotted","source":"uvidět"}},{"data":{"target":"nenáviděný","intoTree":"dotted","source":"nenávidět"}},{"data":{"target":"nenáviděný","intoTree":"dotted","source":"vídat"}},{"data":{"target":"nenáviděný","intoTree":"dotted","source":"vídaný"}},{"data":{"target":"nenáviděný","intoTree":"dotted","source":"předvídat"}},{"data":{"target":"nenáviděný","intoTree":"dotted","source":"vídání"}},{"data":{"target":"nenáviděný","intoTree":"dotted","source":"znenávidět"}},{"data":{"target":"nenáviděný","intoTree":"dotted","source":"nenávist"}},{"data":{"target":"nenáviděný","intoTree":"dotted","source":"vidomý"}},{"data":{"target":"nenáviděný","intoTree":"dotted","source":"nevidomý"}},{"data":{"target":"nenávist","intoTree":"dotted","source":"vidět"}},{"data":{"target":"nenávist","intoTree":"dotted","source":"vídat"}},{"data":{"target":"nenávist","intoTree":"dotted","source":"závidět"}},{"data":{"target":"nenávist","intoTree":"dotted","source":"uvidět"}},{"data":{"target":"nenávist","intoTree":"dotted","source":"nenávidět"}},{"data":{"target":"nenávist","intoTree":"dotted","source":"vídat"}},{"data":{"target":"nenávist","intoTree":"dotted","source":"vídaný"}},{"data":{"target":"nenávist","intoTree":"dotted","source":"předvídat"}},{"data":{"target":"nenávist","intoTree":"dotted","source":"vídání"}},{"data":{"target":"nenávist","intoTree":"dotted","source":"znenávidět"}},{"data":{"target":"nenávist","intoTree":"dotted","source":"nenáviděný"}},{"data":{"target":"nenávist","intoTree":"dotted","source":"vidomý"}},{"data":{"target":"nenávist","intoTree":"dotted","source":"nevidomý"}},{"data":{"target":"vidomý","intoTree":"dotted","source":"vidět"}},{"data":{"target":"vidomý","intoTree":"dotted","source":"vídat"}},{"data":{"target":"vidomý","intoTree":"dotted","source":"závidět"}},{"data":{"target":"vidomý","intoTree":"dotted","source":"uvidět"}},{"data":{"target":"vidomý","intoTree":"dotted","source":"nenávidět"}},{"data":{"target":"vidomý","intoTree":"dotted","source":"vídat"}},{"data":{"target":"vidomý","intoTree":"dotted","source":"vídaný"}},{"data":{"target":"vidomý","intoTree":"dotted","source":"předvídat"}},{"data":{"target":"vidomý","intoTree":"dotted","source":"vídání"}},{"data":{"target":"vidomý","intoTree":"dotted","source":"znenávidět"}},{"data":{"target":"vidomý","intoTree":"dotted","source":"nenáviděný"}},{"data":{"target":"vidomý","intoTree":"dotted","source":"nenávist"}},{"data":{"target":"vidomý","intoTree":"dotted","source":"nevidomý"}},{"data":{"target":"nevidomý","intoTree":"dotted","source":"vidět"}},{"data":{"target":"nevidomý","intoTree":"dotted","source":"vídat"}},{"data":{"target":"nevidomý","intoTree":"dotted","source":"závidět"}},{"data":{"target":"nevidomý","intoTree":"dotted","source":"uvidět"}},{"data":{"target":"nevidomý","intoTree":"dotted","source":"nenávidět"}},{"data":{"target":"nevidomý","intoTree":"dotted","source":"vídat"}},{"data":{"target":"nevidomý","intoTree":"dotted","source":"vídaný"}},{"data":{"target":"nevidomý","intoTree":"dotted","source":"předvídat"}},{"data":{"target":"nevidomý","intoTree":"dotted","source":"vídání"}},{"data":{"target":"nevidomý","intoTree":"dotted","source":"znenávidět"}},{"data":{"target":"nevidomý","intoTree":"dotted","source":"nenáviděný"}},{"data":{"target":"nevidomý","intoTree":"dotted","source":"nenávist"}},{"data":{"target":"nevidomý","intoTree":"dotted","source":"vidomý"}}],"nodes":[{"data":{"name":"vídat","id":"vídat"}},{"data":{"name":"vidět","id":"vidět"}},{"data":{"name":"závidět","id":"závidět"}},{"data":{"name":"uvidět","id":"uvidět"}},{"data":{"name":"nenávidět","id":"nenávidět"}},{"data":{"name":"vídaný","id":"vídaný"}},{"data":{"name":"předvídat","id":"předvídat"}},{"data":{"name":"vídání","id":"vídání"}},{"data":{"name":"znenávidět","id":"znenávidět"}},{"data":{"name":"nenáviděný","id":"nenáviděný"}},{"data":{"name":"nenávist","id":"nenávist"}},{"data":{"name":"vidomý","id":"vidomý"}},{"data":{"name":"nevidomý","id":"nevidomý"}}]}]';
+
+                families = JSON.parse(raw_data);
+                max_fam = families.length;
+                display(families[cur_fam]);
+                $('#current').val(cur_fam + 1);
+                $('#current-small').val(cur_fam + 1);
+                $('#max').val(max_fam);
+                $('#max-small').val(max_fam);
+                setStyle();
+                saveFamily();
+                loaded = true;
+
+                // WHEN: click on remove-edge-button
+                $('#remove').click(function(e) { remove_selected_edges(); });
+                $('#remove-small').click(function(e) { remove_selected_edges(); });
+
+                // WHEN: click on restore-edge-button
+                $('#restore').click(function(e) { restore_selected_edges(); });
+                $('#restore-small').click(function(e) { restore_selected_edges(); });
+
+                // WHEN: click on left-button
+                $('#back').click(function(e) { previous_family(); });
+                $('#back-small').click(function(e) { previous_family(); });
+
+                // WHEN: click on right-button
+                $('#next').click(function(e) { next_family(); });
+                $('#next-small').click(function(e) { next_family(); });
+
+                // WHEN: click on manual-button
+                $('#manual').click(function(e) { show_manual() });
+
+                // WHEN: click on close-button of info-window
+                $('.close').click(function(e) { close_info() });
+
+                // WHEN: click on treeness-button
+                $('#treeness').click(function(e) { check_treeness() });
+                $('#treeness-small').click(function(e) { check_treeness() });
+
+                // WHEN: click on correctness-button
+                $('#correctness').click(function(e) { check_correctness() });
+                $('#correctness-small').click(function(e) { check_correctness() });
+
+            });
+        </script>
+    </head>
+    <body>
+        <div class="w3-row w3-left head">
+            <button class="button btn-black" id="manual">Demo</button>
+            <h2 class="w3-hide-small">&nbsp; &nbsp;Anotační nástroj pro slovotvorbu</h2>
+            <h2 class="w3-hide-medium w3-hide-large">&nbsp;Anotační nástroj</h2>
+        </div>
+        
+
+        <div class="palete w3-border" id="cy"></div>
+
+        <div id="manualwindow" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2><strong>Demo: Anotace slovotvorby</strong></h2>
+                <p style="font-size:medium;">
+                    Představujeme demo verzi plného nástroje sloužícího k ručnímu získání slovotvorných dat, která mohou posloužit pro experimenty se strojovým učením.
+                    Anotovat (tak se říká zpravidla procesu značení/úpravy dat) stačí často totiž jen část dat, která se následně použije pro natrénování počítače, aby zbylé případy anotovat počítač za nás.
+                    Tím ušetříme svůj čas i energii. 
+                </p>
+
+                <h3>Ovládání</h3>
+                <p style="font-size:medium;">
+                    V nástroji si můžete vyzkoušet práci člověka (anotátora), který anotuje data ručně.
+                    Narozdíl od něj si ale okamžitě můžete ověřit, zda jsou vámi anotovaná data správně (pomocí tlačítka <strong>JDIM kontrola</strong>).
+                </p>
+                <h4>Jaký je cíl?</h4>
+                <p style="font-size:medium;">
+                    Na obrazovce jsou vzájemně příbuzná slova; jsou od sebe odvozena různými předponami nebo příponami.
+                    Cílem je zaznamenat, jak jsou od sebe slova vzájemně odvozena, např. <em>hráčka</em> je odvozena od <em>hráč</em>, a ten je odvozen od <em>hrát</em>.
+                    Základní vlastností takto modelované příbuznosti slov je, že každé odvozené slovo má maximálně jedno slovo základní.
+                    Když se dají všechna takto spojená příbuzná slova dohromady, vytvoří tzv. <em>strom</em>, který má v kořeni slovo, od kterého jsou odvozena všechna ostatní slova.
+                </p>
+                <h4>Jak na to?</h4>
+                <p style="font-size:medium;">
+                    Zkuste mezi slovy načtenými na obrazovce najít správné odvozovací vztahy. Celkem je k vyzkoušení 5 skupin příbuzných slov.
+                    <ul style="font-size:medium;">
+                        <li><strong>Přidat spojnici</strong> lze ve třech kliknutích, konkrétně: na odvozené slovo (např. <em>hráčka</em>), na toto tlačítko a na slovo základové (např. <em>hráč</em>). Na pořadí si dejte pozor. Šipky by vždy měly mířit od základových slov ke slovům odvozeným.</li>
+                        <li><strong>Odebrat spojnici</strong> můžete prostým označením příslušné spojnice a kliknutím na toto tlačítko.</li>
+                        <li><strong>Jedná se o strom?</strong> je tlačítko, které poskytuje kontrolu, jestli jsem některému z odvozených slov nezaznamenali více základových slov.</li>
+                        <li><strong>Šipky</strong> přepínají na další sadu příbuzných slov.</li>
+                    </ul>
+                </p>
+                <h3>Další odkazy</h3>
+                <p style="font-size:medium;">
+                    Nástroj byl vyvinut na <a href="https://ufal.mff.cuni.cz/" target="_blank">Ústavu formální a aplikované lingvistiky</a> na MFF UK.
+                    Jeho zjednodušená verze byla vytvořena pro popularizační akci <a href="https://www.mff.cuni.cz/cs/verejnost/informacni-dny/jeden-den-s-informatikou-a-matematikou/2023" target="_blank"><em>Jeden den s informatikou a matematikou</em></a> (leden 2023).
+                    Autorem je <a target="_blank" href="https://lukyjanek.github.io/">Lukáš Kyjánek</a>.
+                    Zdrojové kódy plné i demo verze jsou k dispozici v repozitáři <a target="_blank" href="https://github.com/lukyjanek/uder-annotation-interface">GitHub</a>.
+                    Vznik nástroje byl v průběhu jeho vývoje podpořen následujícími granty: GA19-14534S (Grantová agentura ČR), START/HUM/010 (Grantová schémata Univerzity Karlovy; reg. č. CZ.02.2.69/0.0/0.0/19_073/0016935), SVV260575 (Karlova Univerzita), LINDAT/CLARIAH CZ (Ministerstvo školství, tělovýchovy a sportu; č. LM2015071 a LM2018101).
+                </p>
+            </div>
+        </div>
+
+        <div class="w3-row w3-center controls w3-hide-medium w3-hide-small">
+            <div class="w3-col" style="width: 70%;">
+                <button class="button" id="back"><br>&laquo;</button>
+                <button class="button btn-blue" id="restore">Přidat <br>spojení</button>
+                <button class="button btn-red" id="remove">Odebrat <br>spojení</button>
+                <button class="button" id="next"><br>&raquo;</button>
+            </div>
+
+            <div class="w3-col" style="width: 30%;">
+                <button class="button" id="treeness">Jedná se <br>o strom?</button>
+                <button class="button btn-orange" id="correctness">JDIM <br> kontrola</button>
+            </div>
+        </div>        
+
+        <div class="w3-row w3-center controls w3-hide-large">
+            <div class="w3-col" style="width: 25%;">
+                <strong style="font-size:30px">&darr;</strong>
+                <button class="button" id="back-small"><br>&nbsp;&nbsp;&nbsp;&laquo;&nbsp;&nbsp;&nbsp;</button>
+            </div>
+
+            <div class="w3-col" style="width: 25%;">
+                <button class="button btn-blue" id="restore-small">Přidat <br>spojení</button>
+            </div>
+
+            <div class="w3-col" style="width: 25%;">
+                <button class="button btn-red" id="remove-small">Odebrat <br>spojení</button>
+            </div>
+
+            <div class="w3-col" style="width: 25%;">
+                <button class="button" id="next-small"><br>&nbsp;&nbsp;&nbsp;&raquo;&nbsp;&nbsp;&nbsp;</button>
+                <strong style="font-size:30px">&darr;</strong>
+            </div>
+        </div>
+
+        <div class="w3-row w3-center controls w3-hide-large" style="top: 100%">
+            <div class="w3-col" style="width: 50%;">
+                <button class="button" id="treeness-small">Jedná se <br>&nbsp;&nbsp;o strom?&nbsp;&nbsp;</button>
+            </div>
+
+            <div class="w3-col" style="width: 50%;">
+                <button class="button btn-orange" id="correctness-small">JDIM <br>&nbsp;&nbsp;kontrola&nbsp;&nbsp;</button>
+            </div>
+        </div>
+
+
+    </body>
+</html>
